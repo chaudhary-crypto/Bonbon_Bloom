@@ -1,0 +1,127 @@
+package com.example.ui.screens
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.GameApplication
+import com.example.data.UserProfile
+import com.example.data.UserRepository
+import com.example.game.BoosterType
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+class HomeViewModel(private val repository: UserRepository) : ViewModel() {
+    val userProfile = repository.userProfile.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        UserProfile()
+    )
+
+    val allLevelProgress = repository.allLevelProgress
+
+    fun toggleSound() {
+        viewModelScope.launch {
+            repository.toggleSound()
+        }
+    }
+
+    fun toggleMusic() {
+        viewModelScope.launch {
+            repository.toggleMusic()
+        }
+    }
+
+    fun refillLives() {
+        viewModelScope.launch {
+            repository.refillLives(100)
+        }
+    }
+
+    fun refillLivesFree() {
+        viewModelScope.launch {
+            repository.refillLivesFree()
+        }
+    }
+
+    fun grantBoosterReward(booster: BoosterType, count: Int = 1) {
+        viewModelScope.launch {
+            repository.grantBoosterReward(booster, count)
+        }
+    }
+
+    fun buyBooster(booster: BoosterType, cost: Int) {
+        viewModelScope.launch {
+            repository.buyBooster(booster, cost)
+        }
+    }
+
+    fun addCoins(amount: Int) {
+        viewModelScope.launch {
+            repository.addCoins(amount)
+        }
+    }
+
+    fun addDiamonds(amount: Int) {
+        viewModelScope.launch {
+            repository.addDiamonds(amount)
+        }
+    }
+
+    fun buyDiamondsPack(diamonds: Int, bonusCoins: Int = 0) {
+        viewModelScope.launch {
+            repository.buyDiamondsPack(diamonds, bonusCoins)
+        }
+    }
+
+    fun buyCoinsWithDiamonds(coinsAmount: Int, diamondCost: Int) {
+        viewModelScope.launch {
+            repository.buyCoinsWithDiamonds(coinsAmount, diamondCost)
+        }
+    }
+
+    fun buyHighValueBooster(booster: BoosterType, count: Int, diamondCost: Int) {
+        viewModelScope.launch {
+            repository.buyHighValueBoosterWithDiamonds(booster, count, diamondCost)
+        }
+    }
+
+    fun activateInfiniteLives(hours: Int = 2, diamondCost: Int = 15) {
+        viewModelScope.launch {
+            repository.activateInfiniteLivesWithDiamonds(hours, diamondCost)
+        }
+    }
+
+    fun subscribeVip(days: Int = 7) {
+        viewModelScope.launch {
+            repository.subscribeVip(days)
+        }
+    }
+
+    fun claimVipDailyDiamonds() {
+        viewModelScope.launch {
+            repository.claimVipDailyDiamonds()
+        }
+    }
+
+    fun skipLevelWithDiamonds(levelId: Int, cost: Int = 30) {
+        viewModelScope.launch {
+            repository.skipLevelWithDiamonds(levelId, cost)
+        }
+    }
+
+    fun skipLevel(levelId: Int) {
+        skipLevelWithDiamonds(levelId)
+    }
+
+    companion object {
+        val Factory: ViewModelProvider.Factory = viewModelFactory {
+            initializer {
+                val app = (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as GameApplication)
+                HomeViewModel(UserRepository(app.database.userDao()))
+            }
+        }
+    }
+}
