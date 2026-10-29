@@ -2,6 +2,8 @@ package com.example.game
 
 import androidx.compose.ui.graphics.Color
 import com.example.audio.SoundManager
+import com.example.security.AntiCheatManager
+import com.example.security.MoveValidationResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -63,7 +65,7 @@ class GameEngine {
         val config = LevelCatalog.getLevel(levelId)
         _currentLevel.value = config
         width = 8
-        height = 8
+        height = 10
         _movesLeft.value = config.maxMoves
         _score.value = 0
         _objectiveProgress.value = 0
@@ -73,11 +75,8 @@ class GameEngine {
         _particles.value = emptyList()
         _activeBooster.value = BoosterType.None
 
-        var initialBoard = createBoardForLevel(config)
-        // Ensure no initial matches
-        while (findMatchGroups(initialBoard).isNotEmpty()) {
-            initialBoard = createBoardForLevel(config)
-        }
+        // Instant deterministic O(N) board generation guaranteed to have 0 matches and zero lag
+        val initialBoard = createMatchFreeBoard(config)
         _board.value = initialBoard
         resetHintTimer()
     }
@@ -86,13 +85,22 @@ class GameEngine {
         _gameState.value = state
     }
 
-    private fun createBoardForLevel(config: LevelConfig): List<List<Cell>> {
+    private fun createMatchFreeBoard(config: LevelConfig): List<List<Cell>> {
         val jellySet = config.initialJellyPositions.toSet()
         val iceSet = config.initialIcePositions.toSet()
         val chocSet = config.initialChocolatePositions.toSet()
 
-        return List(height) { r ->
-            List(width) { c ->
+        val standardTypes = listOf(
+            CandyType.Strawberry,
+            CandyType.Lemon,
+            CandyType.Blueberry,
+            CandyType.Grape,
+            CandyType.Orange,
+            CandyType.Mint
+        )
+
+        val grid = Array(height) { r ->
+            Array(width) { c ->
                 val pos = GridPosition(r, c)
                 val isChoc = chocSet.contains(pos)
                 val isIce = iceSet.contains(pos)
@@ -100,7 +108,7 @@ class GameEngine {
 
                 Cell(
                     position = pos,
-                    candy = if (isChoc) null else generateRandomCandy(),
+                    candy = null,
                     obstacle = when {
                         isChoc -> ObstacleType.Chocolate
                         isIce -> ObstacleType.Ice
@@ -110,6 +118,82 @@ class GameEngine {
                 )
             }
         }
+
+        // Fill candies single-pass avoiding 3-in-a-row matches
+        for (r in 0 until height) {
+            for (c in 0 until width) {
+                if (grid[r][c].obstacle == ObstacleType.Chocolate) continue
+
+                val excludedTypes = mutableSetOf<CandyType>()
+                // Check horizontal match (left 2 cells)
+                if (c >= 2) {
+                    val left1 = grid[r][c - 1].candy?.type
+                    val left2 = grid[r][c - 2].candy?.type
+                    if (left1 != null && left1 == left2) {
+                        excludedTypes.add(left1)
+                    }
+                }
+                // Check vertical match (top 2 cells)
+                if (r >= 2) {
+                    val up1 = grid[r - 1][c].candy?.type
+                    val up2 = grid[r - 2][c].candy?.type
+                    if (up1 != null && up1 == up2) {
+                        excludedTypes.add(up1)
+                    }
+                }
+
+                val availableTypes = standardTypes.filterNot { excludedTypes.contains(it) }
+                val chosenType = if (availableTypes.isNotEmpty()) {
+                    availableTypes[Random.nextInt(availableTypes.size)]
+                } else {
+                    standardTypes[Random.nextInt(standardTypes.size)]
+                }
+
+                grid[r][c] = grid[r][c].copy(
+                    candy = Candy(
+                        id = ++candyIdCounter,
+                        type = chosenType,
+                        specialType = SpecialType.None
+                    )
+                )
+            }
+        }
+
+        val resultBoard = grid.map { it.toList() }
+        // Ensure at least one valid move exists right off the bat with zero initial matches
+        if (!hasAnyValidMove(resultBoard) || findMatchGroups(resultBoard).isNotEmpty()) {
+            for (attempt in 0 until 50) {
+                val candidateGrid = List(height) { r ->
+                    MutableList(width) { c -> grid[r][c].copy() }
+                }
+                for (r in 0 until height) {
+                    for (c in 0 until width) {
+                        if (candidateGrid[r][c].obstacle == ObstacleType.Chocolate) continue
+                        val excluded = mutableSetOf<CandyType>()
+                        if (c >= 2) {
+                            val l1 = candidateGrid[r][c - 1].candy?.type
+                            val l2 = candidateGrid[r][c - 2].candy?.type
+                            if (l1 != null && l1 == l2) excluded.add(l1)
+                        }
+                        if (r >= 2) {
+                            val u1 = candidateGrid[r - 1][c].candy?.type
+                            val u2 = candidateGrid[r - 2][c].candy?.type
+                            if (u1 != null && u1 == u2) excluded.add(u1)
+                        }
+                        val avail = standardTypes.filterNot { excluded.contains(it) }
+                        val chosen = if (avail.isNotEmpty()) avail[Random.nextInt(avail.size)] else standardTypes.random()
+                        candidateGrid[r][c] = candidateGrid[r][c].copy(
+                            candy = Candy(id = ++candyIdCounter, type = chosen, specialType = SpecialType.None)
+                        )
+                    }
+                }
+                val candidateBoard = candidateGrid.map { it.toList() }
+                if (findMatchGroups(candidateBoard).isEmpty() && hasAnyValidMove(candidateBoard)) {
+                    return candidateBoard
+                }
+            }
+        }
+        return resultBoard
     }
 
     private fun generateRandomCandy(allowRainbow: Boolean = false): Candy {
@@ -332,65 +416,80 @@ class GameEngine {
         if (_gameState.value != GameState.Idle) return
         if (_movesLeft.value <= 0) return
 
-        // Check adjacency
-        val isAdjacent = (abs(pos1.row - pos2.row) == 1 && pos1.col == pos2.col) ||
-                         (abs(pos1.col - pos2.col) == 1 && pos1.row == pos2.row)
-        if (!isAdjacent) return
+        // Anti-Cheat: Validate move speed and coordinate adjacency to prevent teleport or macro hacks
+        val validation = AntiCheatManager.validateMove(pos1, pos2)
+        if (validation != MoveValidationResult.Valid) {
+            return
+        }
 
-        val b = _board.value.map { it.toMutableList() }.toMutableList()
-        val c1 = b[pos1.row][pos1.col].candy ?: return
-        val c2 = b[pos2.row][pos2.col].candy ?: return
+        try {
+            val b = _board.value.map { it.toMutableList() }.toMutableList()
+            val c1 = b[pos1.row][pos1.col].candy ?: return
+            val c2 = b[pos2.row][pos2.col].candy ?: return
 
-        // Cancel hint timer while playing
-        hintJob?.cancel()
-        _hintCandies.value = emptyList()
+            // Cancel hint timer while playing
+            hintJob?.cancel()
+            _hintCandies.value = emptyList()
 
-        engineScope.launch {
-            _gameState.value = GameState.Swapping
-            SoundManager.playSwap()
+            engineScope.launch {
+                try {
+                    _gameState.value = GameState.Swapping
+                    SoundManager.playSwap()
 
-            // Visual swap
-            b[pos1.row][pos1.col] = b[pos1.row][pos1.col].copy(candy = c2)
-            b[pos2.row][pos2.col] = b[pos2.row][pos2.col].copy(candy = c1)
-            _board.value = b.map { it.toList() }
-            delay(180)
+                    // Decrement here before any suspends! 
+                    _movesLeft.value -= 1
 
-            // Check Special Combinations
-            val isSpecialCombo = handleSpecialCombos(b, pos1, pos2, c1, c2)
-            if (isSpecialCombo) {
-                _movesLeft.value -= 1
-                return@launch
+                    // Visual swap
+                    b[pos1.row][pos1.col] = b[pos1.row][pos1.col].copy(candy = c2)
+                    b[pos2.row][pos2.col] = b[pos2.row][pos2.col].copy(candy = c1)
+                    _board.value = b.map { it.toList() }
+                    delay(180)
+
+                    // Check Special Combinations
+                    val isSpecialCombo = handleSpecialCombos(b, pos1, pos2, c1, c2)
+                    if (isSpecialCombo) {
+                        return@launch
+                    }
+
+                    // Normal match check
+                    val matchGroups = findMatchGroups(b)
+                    if (matchGroups.isEmpty()) {
+                        // Invalid swap: Revert back and refund the move!
+                        _movesLeft.value += 1
+                        SoundManager.playInvalidSwap()
+                        val bBack = b.map { it.toMutableList() }.toMutableList()
+                        bBack[pos1.row][pos1.col] = bBack[pos1.row][pos1.col].copy(candy = c1)
+                        bBack[pos2.row][pos2.col] = bBack[pos2.row][pos2.col].copy(candy = c2)
+                        _board.value = bBack.map { it.toList() }
+                        delay(180)
+                        _gameState.value = GameState.Idle
+                        resetHintTimer()
+                    } else {
+                        comboCount = 0
+                        processMatches(b, matchGroups, pivotPos = pos2)
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    android.util.Log.e("GameEngine", "Error during swap", e)
+                    _gameState.value = GameState.Idle
+                }
             }
-
-            // Normal match check
-            val matchGroups = findMatchGroups(b)
-            if (matchGroups.isEmpty()) {
-                // Invalid swap: Revert back!
-                SoundManager.playInvalidSwap()
-                val bBack = b.map { it.toMutableList() }.toMutableList()
-                bBack[pos1.row][pos1.col] = bBack[pos1.row][pos1.col].copy(candy = c1)
-                bBack[pos2.row][pos2.col] = bBack[pos2.row][pos2.col].copy(candy = c2)
-                _board.value = bBack.map { it.toList() }
-                delay(180)
-                _gameState.value = GameState.Idle
-                resetHintTimer()
-            } else {
-                _movesLeft.value -= 1
-                comboCount = 0
-                processMatches(b, matchGroups, pivotPos = pos2)
-            }
+        } catch (e: Exception) {
+            android.util.Log.e("GameEngine", "Error validating swap", e)
+            _gameState.value = GameState.Idle
         }
     }
 
     /**
-     * Handles Trademark Candy Crush Special Combinations:
-     * - Rainbow + Rainbow: Clears whole board!
-     * - Rainbow + Rocket: All candies of rocket color become rockets and detonate!
-     * - Rainbow + Bomb: All candies of bomb color become bombs and explode!
-     * - Rainbow + Normal: Clears all of that color!
-     * - Rocket + Bomb: 3-row & 3-column mega blast!
-     * - Rocket + Rocket: Row + Column cross blast!
-     * - Bomb + Bomb: 5x5 massive blast!
+     * Handles Original Bonbon Bloom Blossom Combinations:
+     * - Rainbow Sprinkle Bomb + Rainbow Sprinkle Bomb: Clears whole board!
+     * - Rainbow Sprinkle Bomb + Stripe Bonbon: All bonbons of stripe color become stripes and detonate!
+     * - Rainbow Sprinkle Bomb + Wrapped Bonbon: All bonbons of wrapped color become wrapped bombs and explode!
+     * - Rainbow Sprinkle Bomb + Normal: Clears all of that color!
+     * - Stripe Bonbon + Wrapped Bonbon: 3-row & 3-column mega blast!
+     * - Stripe + Stripe: Row + Column cross blast!
+     * - Wrapped + Wrapped: 5x5 massive bloom blast!
      */
     private suspend fun handleSpecialCombos(
         board: List<MutableList<Cell>>,

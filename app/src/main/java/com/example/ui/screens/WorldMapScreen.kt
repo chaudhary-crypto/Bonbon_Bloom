@@ -84,12 +84,24 @@ fun WorldMapScreen(
     var showShopDialog by remember { mutableStateOf(false) }
     var shopInitialTab by remember { androidx.compose.runtime.mutableIntStateOf(0) }
 
+    var selectedChapterNum by remember {
+        androidx.compose.runtime.mutableIntStateOf(LevelCatalog.getWorldNumber(profile.highestUnlockedLevel))
+    }
+
+    val currentChapter = remember(selectedChapterNum) {
+        LevelCatalog.CHAPTERS.find { it.chapterNumber == selectedChapterNum } ?: LevelCatalog.CHAPTERS[0]
+    }
+
     val listState = rememberLazyListState()
 
-    // Scroll to player's current unlocked level
-    LaunchedEffect(profile.highestUnlockedLevel) {
-        val targetIndex = (profile.highestUnlockedLevel - 1).coerceIn(0, 99)
-        listState.scrollToItem(targetIndex)
+    // Scroll to player's current unlocked level within the current chapter
+    LaunchedEffect(selectedChapterNum, profile.highestUnlockedLevel) {
+        if (profile.highestUnlockedLevel in currentChapter.startLevel..currentChapter.endLevel) {
+            val targetIndex = (profile.highestUnlockedLevel - currentChapter.startLevel).coerceIn(0, 49)
+            listState.animateScrollToItem(targetIndex)
+        } else {
+            listState.scrollToItem(0)
+        }
     }
 
     Box(
@@ -126,43 +138,137 @@ fun WorldMapScreen(
                 }
             )
 
-            // 100-Level Adventure Map Scroll View
+            // Fast Chapter Selector Pill Bar (20 Chapters)
+            androidx.compose.foundation.lazy.LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(LevelCatalog.CHAPTERS.size) { idx ->
+                    val chap = LevelCatalog.CHAPTERS[idx]
+                    val isSelected = chap.chapterNumber == selectedChapterNum
+                    val isChapUnlocked = chap.startLevel <= profile.highestUnlockedLevel
+
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = when {
+                            isSelected -> Color(0xFFFFD54F)
+                            isChapUnlocked -> Color.White.copy(alpha = 0.22f)
+                            else -> Color.Black.copy(alpha = 0.3f)
+                        },
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) Color(0xFFFF9100) else Color.White.copy(alpha = 0.35f)
+                        ),
+                        modifier = Modifier.clickable {
+                            SoundManager.playButtonClick()
+                            selectedChapterNum = chap.chapterNumber
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(chap.emoji, fontSize = 13.sp)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Ch ${chap.chapterNumber}",
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                                color = if (isSelected) Color(0xFF3E2723) else Color.White
+                            )
+                            if (!isChapUnlocked) {
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text("🔒", fontSize = 10.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Chapter Title & Info Banner
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.18f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "${currentChapter.emoji} Chapter ${currentChapter.chapterNumber}: ${currentChapter.name}",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Levels ${currentChapter.startLevel} – ${currentChapter.endLevel} • ${currentChapter.themeDescription}",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.85f),
+                            maxLines = 1
+                        )
+                    }
+
+                    if (profile.highestUnlockedLevel !in currentChapter.startLevel..currentChapter.endLevel) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFF00E676),
+                            modifier = Modifier.clickable {
+                                SoundManager.playButtonClick()
+                                selectedChapterNum = LevelCatalog.getWorldNumber(profile.highestUnlockedLevel)
+                            }
+                        ) {
+                            Text(
+                                text = "Lvl ${profile.highestUnlockedLevel} ▶",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color(0xFF1B5E20),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Curated 50-Level Chapter Adventure Map Scroll View (Instant, Zero-Lag)
             LazyColumn(
                 state = listState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
                     .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
                 reverseLayout = false
             ) {
-                val levels = (1..100).toList()
+                val levels = (currentChapter.startLevel..currentChapter.endLevel).toList()
 
                 itemsIndexed(levels) { index, levelId ->
-                    val isWorldDivider = (levelId - 1) % 20 == 0
-                    if (isWorldDivider) {
-                        WorldBanner(LevelCatalog.getWorldNumber(levelId), LevelCatalog.getWorldName(levelId))
-                        Spacer(modifier = Modifier.height(10.dp))
-                    }
-
                     val isUnlocked = levelId <= profile.highestUnlockedLevel
                     val isCurrent = levelId == profile.highestUnlockedLevel
                     val progress = progressMap[levelId]
 
-                    // Calculate winding offset for Candy Crush winding path
+                    // Smooth sinusoidal winding offset for Bonbon Bloom world path
                     val horizontalShift = when (index % 6) {
                         0 -> 0.dp
-                        1 -> 60.dp
-                        2 -> 90.dp
-                        3 -> 50.dp
-                        4 -> (-50).dp
-                        else -> (-80).dp
+                        1 -> 55.dp
+                        2 -> 85.dp
+                        3 -> 45.dp
+                        4 -> (-45).dp
+                        else -> (-75).dp
                     }
 
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 4.dp),
+                            .padding(vertical = 3.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         LevelNode(
@@ -178,6 +284,49 @@ fun WorldMapScreen(
                                 }
                             }
                         )
+                    }
+
+                    // Chapter End Reward Chest Node after final level of chapter
+                    if (levelId == currentChapter.endLevel) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        val isChapterCompleted = profile.highestUnlockedLevel > currentChapter.endLevel
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .clickable {
+                                    SoundManager.playLevelWin()
+                                },
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isChapterCompleted) Color(0xFFFFD54F) else Color.White.copy(alpha = 0.2f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(if (isChapterCompleted) "🏆" else "🎁", fontSize = 28.sp)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = if (isChapterCompleted) "Chapter ${currentChapter.chapterNumber} Mastered!" else "Chapter ${currentChapter.chapterNumber} Reward Chest",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = if (isChapterCompleted) Color(0xFF3E2723) else Color.White
+                                    )
+                                    Text(
+                                        text = if (isChapterCompleted) "+500 Coins & Special Boosters Claimed!" else "Complete all 50 levels to crack open chest!",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isChapterCompleted) Color(0xFF5D4037) else Color.White.copy(alpha = 0.8f)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

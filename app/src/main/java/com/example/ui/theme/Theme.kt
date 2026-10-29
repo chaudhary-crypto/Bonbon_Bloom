@@ -41,7 +41,7 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 @Composable
-fun CrushCandyTheme(
+fun BonbonBloomTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
@@ -53,3 +53,9 @@ fun CrushCandyTheme(
         content = content
     )
 }
+
+@Composable
+fun CrushCandyTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) = BonbonBloomTheme(darkTheme, content)

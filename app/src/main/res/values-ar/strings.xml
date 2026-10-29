@@ -1,0 +1,36 @@
+<resources>
+    <string name="app_name">بونبون بلوم</string>
+    <string name="settings_title">الإعدادات</string>
+    <string name="sound_effects">المؤثرات الصوتية</string>
+    <string name="music">الموسيقى</string>
+    <string name="haptics">الاهتزاز اللمسي</string>
+    <string name="language">اللغة</string>
+    <string name="privacy_policy_title">سياسة الخصوصية</string>
+    <string name="terms_of_service_title">شروط الخدمة</string>
+    <string name="restore_purchases">استعادة المشتريات</string>
+    <string name="delete_my_data">حذف بياناتي</string>
+    <string name="privacy_options">خيارات الخصوصية</string>
+    <string name="vip_subscription_terms">اشتراك يتجدد تلقائيًا. يتم خصم الدفعة من حساب Google Play عند التأكيد. يتجدد الاشتراك تلقائيًا ما لم يتم إلغاؤه قبل 24 ساعة على الأقل من نهاية الفترة الحالية. قم بالإدارة أو الإلغاء في أي وقت في متجر Google Play > الاشتراكات.</string>
+
+    <string name="level_title">المستوى %1$d</string>
+    <string name="moves_left">الحركات: %1$d</string>
+    <string name="score_label">النقاط: %1$d</string>
+    <string name="target_label">الهدف</string>
+    <string name="sweet_praise">حلو!</string>
+    <string name="tasty_praise">لذيذ!</string>
+    <string name="bloom_blast">انفجار بلوم!</string>
+    <string name="level_complete">اكتمل المستوى!</string>
+    <string name="level_failed">نفدت الحركات!</string>
+    <string name="watch_ad_moves">مشاهدة إعلان: +5 حركات</string>
+    <string name="watch_ad_double_coins">مشاهدة إعلان: مضاعفة القطع</string>
+    <string name="continue_button">متابعة</string>
+    <string name="retry_button">إعادة المحاولة</string>
+
+    <string name="shop_title">متجر الحلوى</string>
+    <string name="vip_pass">اشتراك VIP الذهبي</string>
+    <string name="remove_ads_title">إزالة الإعلانات</string>
+    <string name="remove_ads_desc">إزالة جميع الإعلانات البانر والإعلانات البينية نهائيًا!</string>
+    <string name="lucky_wheel_title">عجلة الحظ</string>
+    <string name="daily_spin">دورة مجانية يومية</string>
+    <string name="piggy_bank_title">حصالة النقود</string>
+</resources>

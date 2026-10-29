@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="300dp"
+    android:height="180dp"
+    android:viewportWidth="300"
+    android:viewportHeight="180">
+
+    <!-- 1. Radiating Sunburst Celebration Rays -->
+    <path
+        android:fillColor="#15FFFFFF"
+        android:pathData="M150,90 L0,20 L0,50 Z M150,90 L30,0 L70,0 Z M150,90 L130,0 L170,0 Z M150,90 L230,0 L270,0 Z M150,90 L300,20 L300,50 Z M150,90 L300,90 L300,120 Z M150,90 L300,160 L260,180 Z M150,90 L180,180 L120,180 Z M150,90 L40,180 L0,160 Z M150,90 L0,120 L0,90 Z" />
+
+    <!-- 2. Golden Celebration Trophy / Candy Cauldron -->
+    <path android:pathData="M110,60 L190,60 L180,115 C180,135 120,135 120,115 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:angle="90"
+                android:startColor="#FF6F00"
+                android:centerColor="#FFD54F"
+                android:endColor="#FFF59D"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
+    <!-- Trophy Handles -->
+    <path
+        android:strokeWidth="6"
+        android:strokeColor="#FFC107"
+        android:pathData="M115,70 C95,70 95,100 120,105 M185,70 C205,70 205,100 180,105" />
+    <!-- Trophy Base -->
+    <path
+        android:fillColor="#FFA000"
+        android:pathData="M140,125 L160,125 L165,145 L135,145 Z" />
+    <path
+        android:fillColor="#FF8F00"
+        android:pathData="M125,145 L175,145 L178,155 L122,155 Z" />
+
+    <!-- 3. Giant Star in Trophy -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M150,68 L155,83 L170,83 L158,92 L163,107 L150,97 L137,107 L142,92 L130,83 L145,83 Z" />
+
+    <!-- 4. Candy Confetti Bursting Outward -->
+    <!-- Confetti Dots -->
+    <path
+        android:fillColor="#FF4081"
+        android:pathData="M70,40 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0 M220,35 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0 M60,120 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0 M235,115 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M100,25 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 M190,20 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0 M80,85 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 M215,80 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+    <path
+        android:fillColor="#76FF03"
+        android:pathData="M130,15 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 M165,15 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 M40,65 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0 M250,60 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+
+    <!-- Confetti Ribbons -->
+    <path
+        android:strokeWidth="4"
+        android:strokeColor="#FFD54F"
+        android:pathData="M50,30 Q65,15 75,35 T95,20" />
+    <path
+        android:strokeWidth="4"
+        android:strokeColor="#FF1744"
+        android:pathData="M245,25 Q230,10 220,30 T200,15" />
+    <path
+        android:strokeWidth="3"
+        android:strokeColor="#E040FB"
+        android:pathData="M35,100 Q45,85 55,105 T75,95" />
+    <path
+        android:strokeWidth="3"
+        android:strokeColor="#00E676"
+        android:pathData="M260,95 Q250,80 240,100 T220,90" />
+
+    <!-- 5. Golden Twinkle Sparkles -->
+    <path
+        android:fillColor="#FFF59D"
+        android:pathData="M150,2 L152,10 L160,12 L152,14 L150,22 L148,14 L140,12 L148,10 Z M105,45 L106.5,51 L112,52.5 L106.5,54 L105,60 L103.5,54 L98,52.5 L103.5,51 Z M195,45 L196.5,51 L202,52.5 L196.5,54 L195,60 L193.5,54 L188,52.5 L193.5,51 Z" />
+</vector>

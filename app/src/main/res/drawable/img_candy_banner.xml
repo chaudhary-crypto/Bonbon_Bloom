@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="400dp"
+    android:height="160dp"
+    android:viewportWidth="400"
+    android:viewportHeight="160">
+
+    <!-- 1. Sky Gradient -->
+    <path android:pathData="M0,0h400v160h-400z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:angle="90"
+                android:startColor="#FF4081"
+                android:centerColor="#7C4DFF"
+                android:endColor="#311B92"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
+
+    <!-- 2. Rainbow Arch -->
+    <path
+        android:strokeWidth="5"
+        android:strokeColor="#50FF1744"
+        android:pathData="M-20,130 Q120,20 260,130" />
+    <path
+        android:strokeWidth="5"
+        android:strokeColor="#50FFEA00"
+        android:pathData="M-20,135 Q120,25 260,135" />
+    <path
+        android:strokeWidth="5"
+        android:strokeColor="#5000E676"
+        android:pathData="M-20,140 Q120,30 260,140" />
+    <path
+        android:strokeWidth="5"
+        android:strokeColor="#5000B0FF"
+        android:pathData="M-20,145 Q120,35 260,145" />
+
+    <!-- 3. Soft Fluffy Sugar Clouds -->
+    <!-- Cloud Left -->
+    <path
+        android:fillColor="#40FFFFFF"
+        android:pathData="M40,55 Q50,40 70,45 Q90,35 110,48 Q125,42 135,55 Q145,70 120,75 L50,75 Q35,70 40,55 Z" />
+    <!-- Cloud Right -->
+    <path
+        android:fillColor="#35FFFFFF"
+        android:pathData="M270,45 Q285,30 305,35 Q325,25 345,40 Q360,35 370,48 Q380,62 355,68 L280,68 Q260,62 270,45 Z" />
+
+    <!-- 4. Distant Candy Hills (Cotton Candy Pink) -->
+    <path android:pathData="M0,160 L0,110 Q90,70 200,110 T400,95 L400,160 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:angle="90"
+                android:startColor="#E91E63"
+                android:endColor="#880E4F"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
+
+    <!-- 5. Foreground Sweet Chocolate / Mint Rolling Hills -->
+    <path android:pathData="M0,160 L0,130 Q110,95 230,135 T400,120 L400,160 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:angle="90"
+                android:startColor="#00E676"
+                android:endColor="#004D40"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
+
+    <!-- 6. Giant Swirled Lollipops -->
+    <!-- Lollipop Left (Yellow/Orange) -->
+    <path
+        android:strokeWidth="4"
+        android:strokeColor="#FFFFFF"
+        android:pathData="M70,80 L70,145" />
+    <path android:pathData="M70,55 a22,22 0 1,0 0.1,0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="65"
+                android:centerY="50"
+                android:gradientRadius="24"
+                android:startColor="#FFEE58"
+                android:centerColor="#FF9800"
+                android:endColor="#E65100"
+                android:type="radial" />
+        </aapt:attr>
+    </path>
+    <!-- Spiral Stripe on Lollipop -->
+    <path
+        android:strokeWidth="3"
+        android:strokeColor="#FFFFFF"
+        android:pathData="M70,55 C70,45 80,48 80,55 C80,65 60,65 60,55 C60,40 85,40 85,55" />
+
+    <!-- Lollipop Right (Pink/Purple) -->
+    <path
+        android:strokeWidth="4"
+        android:strokeColor="#FFFFFF"
+        android:pathData="M330,75 L330,140" />
+    <path android:pathData="M330,52 a20,20 0 1,0 0.1,0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="325"
+                android:centerY="48"
+                android:gradientRadius="22"
+                android:startColor="#FF80AB"
+                android:centerColor="#E040FB"
+                android:endColor="#4A148C"
+                android:type="radial" />
+        </aapt:attr>
+    </path>
+    <path
+        android:strokeWidth="2.5"
+        android:strokeColor="#FFFFFF"
+        android:pathData="M330,52 C330,42 340,45 340,52 C340,60 322,60 322,52 C322,38 344,38 344,52" />
+
+    <!-- 7. Whimsical Sugar Gumdrops along the hills -->
+    <!-- Gumdrop 1 (Cyan) -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M140,135 Q140,118 150,118 Q160,118 160,135 Z" />
+    <path
+        android:fillColor="#80FFFFFF"
+        android:pathData="M144,124 Q146,120 150,120 Q148,124 144,124 Z" />
+
+    <!-- Gumdrop 2 (Cherry Red) -->
+    <path
+        android:fillColor="#FF1744"
+        android:pathData="M245,140 Q245,125 255,125 Q265,125 265,140 Z" />
+    <path
+        android:fillColor="#80FFFFFF"
+        android:pathData="M249,130 Q251,127 255,127 Q253,130 249,130 Z" />
+
+    <!-- Gumdrop 3 (Yellow Lemon) -->
+    <path
+        android:fillColor="#FFEA00"
+        android:pathData="M275,142 Q275,130 283,130 Q291,130 291,142 Z" />
+
+    <!-- 8. Twinkling Sugar Sparkles / Stars -->
+    <path
+        android:fillColor="#FFF9C4"
+        android:pathData="M180,35 L182,42 L189,44 L182,46 L180,53 L178,46 L171,44 L178,42 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M220,50 L221,54 L225,55 L221,56 L220,60 L219,56 L215,55 L219,54 Z" />
+    <path
+        android:fillColor="#FFF59D"
+        android:pathData="M20,30 L21,34 L25,35 L21,36 L20,40 L19,36 L15,35 L19,34 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M380,25 L381,28 L384,29 L381,30 L380,33 L379,30 L376,29 L379,28 Z" />
+</vector>

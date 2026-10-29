@@ -1,0 +1,36 @@
+<resources>
+    <string name="app_name">Bonbon Bloom</string>
+    <string name="settings_title">Ajustes</string>
+    <string name="sound_effects">Efectos de sonido</string>
+    <string name="music">Música</string>
+    <string name="haptics">Vibración háptica</string>
+    <string name="language">Idioma</string>
+    <string name="privacy_policy_title">Política de privacidad</string>
+    <string name="terms_of_service_title">Términos del servicio</string>
+    <string name="restore_purchases">Restaurar compras</string>
+    <string name="delete_my_data">Eliminar mis datos</string>
+    <string name="privacy_options">Opciones de privacidad</string>
+    <string name="vip_subscription_terms">Suscripción de renovación automática. El pago se cargará a la cuenta de Google Play en la confirmación. La suscripción se renueva automáticamente a menos que se cancele al menos 24 horas antes del final del período actual. Administra o cancela en cualquier momento en Google Play Store > Suscripciones.</string>
+
+    <string name="level_title">Nivel %1$d</string>
+    <string name="moves_left">Movimientos: %1$d</string>
+    <string name="score_label">Puntos: %1$d</string>
+    <string name="target_label">Objetivo</string>
+    <string name="sweet_praise">¡Dulce!</string>
+    <string name="tasty_praise">¡Delicioso!</string>
+    <string name="bloom_blast">¡Explosión Bloom!</string>
+    <string name="level_complete">¡Nivel completado!</string>
+    <string name="level_failed">¡Sin movimientos!</string>
+    <string name="watch_ad_moves">Ver anuncio: +5 movimientos</string>
+    <string name="watch_ad_double_coins">Ver anuncio: 2x Monedas</string>
+    <string name="continue_button">Continuar</string>
+    <string name="retry_button">Reintentar</string>
+
+    <string name="shop_title">Tienda Dulce</string>
+    <string name="vip_pass">Pase VIP Oro</string>
+    <string name="remove_ads_title">Eliminar anuncios</string>
+    <string name="remove_ads_desc">¡Elimina permanentemente los anuncios publicitarios e intersticiales!</string>
+    <string name="lucky_wheel_title">Rueda de la Fortuna</string>
+    <string name="daily_spin">Giro gratis diario</string>
+    <string name="piggy_bank_title">Hucha de cerdito</string>
+</resources>

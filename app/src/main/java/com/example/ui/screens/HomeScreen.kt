@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -33,6 +35,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -42,23 +45,35 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import android.app.Activity
+import android.os.Build
+import com.example.MainActivity
+import com.example.R
 import com.example.ads.AdManager
 import com.example.ads.BannerAdView
 import com.example.audio.SoundManager
 import com.example.game.Candy
 import com.example.game.CandyType
 import com.example.game.SpecialType
+import com.example.ui.components.AccountProfileDialog
 import com.example.ui.components.CandyView
+import com.example.ui.components.LoginDialog
+import com.example.ui.components.LuckyWheelDialog
+import com.example.ui.components.PiggyBankDialog
+import com.example.ui.components.SecurityStatusDialog
+import com.example.ui.components.SettingsDialog
 import com.example.ui.components.VipAndShopDialog
 
 @Composable
@@ -69,10 +84,23 @@ fun HomeScreen(
 ) {
     val profile by viewModel.userProfile.collectAsState()
     var showDailyRewardDialog by remember { mutableStateOf(false) }
+    var showLuckyWheelDialog by remember { mutableStateOf(false) }
+    var showPiggyBankDialog by remember { mutableStateOf(false) }
     var showVipShopDialog by remember { mutableStateOf(false) }
+    var showLoginDialog by remember { mutableStateOf(false) }
+    var showAccountDialog by remember { mutableStateOf(false) }
+    var showSecurityDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+    var showNotificationRationaleDialog by remember { mutableStateOf(false) }
     var shopInitialTab by remember { mutableStateOf(0) }
     val context = LocalContext.current
     val activity = context as? Activity
+
+    LaunchedEffect(profile.highestUnlockedLevel) {
+        if (profile.highestUnlockedLevel > 1 && !profile.hasAskedNotificationPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            showNotificationRationaleDialog = true
+        }
+    }
 
     LaunchedEffect(profile.musicEnabled) {
         if (profile.musicEnabled) {
@@ -110,11 +138,166 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header: Lives, Coins, Diamonds, Audio Controls
+            // Top Bar: Account Login/Profile & Anti-Cheat Shield & Sound/Music
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Account Button
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = Color(0xFF1F1235).copy(alpha = 0.85f),
+                    modifier = Modifier.clickable {
+                        SoundManager.playButtonClick()
+                        if (profile.isLoggedIn) {
+                            showAccountDialog = true
+                        } else {
+                            showLoginDialog = true
+                        }
+                    }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = when (profile.authProvider) {
+                                "GOOGLE" -> "🌐"
+                                "EMAIL" -> "📧"
+                                "PHONE" -> "📱"
+                                else -> "👤"
+                            },
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (profile.isLoggedIn) profile.username else "Sign In (Google)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        if (!profile.isLoggedIn) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFFFD54F),
+                                modifier = Modifier.padding(start = 2.dp)
+                            ) {
+                                Text(
+                                    text = "SYNC",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color(0xFF3E2723),
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Anti-Cheat Shield Pill
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = if (profile.isCheatingDetected) Color(0xFFD32F2F) else Color(0xFF00E676).copy(alpha = 0.25f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (profile.isCheatingDetected) Color(0xFFFF5252) else Color(0xFF00E676)
+                        ),
+                        modifier = Modifier.clickable {
+                            SoundManager.playButtonClick()
+                            showSecurityDialog = true
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("🛡️", fontSize = 13.sp)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (profile.isCheatingDetected) "Alert!" else "Anti-Hack",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (profile.isCheatingDetected) Color.White else Color(0xFFE8F5E9)
+                            )
+                        }
+                    }
+
+                    // Sound & Music Toggles
+                    Surface(
+                        shape = CircleShape,
+                        color = if (profile.soundEnabled) Color(0xFF00E676) else Color.White.copy(alpha = 0.3f),
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        IconButton(onClick = { viewModel.toggleSound() }) {
+                            Text(if (profile.soundEnabled) "🔊" else "🔇", fontSize = 13.sp)
+                        }
+                    }
+                    Surface(
+                        shape = CircleShape,
+                        color = if (profile.musicEnabled) Color(0xFFFF4081) else Color.White.copy(alpha = 0.3f),
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        IconButton(onClick = { viewModel.toggleMusic() }) {
+                            Text(if (profile.musicEnabled) "🎵" else "🔕", fontSize = 13.sp)
+                        }
+                    }
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = 0.25f),
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        IconButton(onClick = {
+                            SoundManager.playButtonClick()
+                            showSettingsDialog = true
+                        }) {
+                            Text("⚙️", fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+
+            // Anti-Cheat Active Warning Banner (if tampered)
+            if (profile.isCheatingDetected) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFB71C1C),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .clickable {
+                            SoundManager.playButtonClick()
+                            showSecurityDialog = true
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("⚠️", fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Anti-Cheat Guard: Data integrity alert. Tap to inspect shield & verify fair play.",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+
+            // Secondary Header: Lives, Coins, Diamonds
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -198,58 +381,76 @@ fun HomeScreen(
                     }
                 }
 
-                // Sound & Music Toggles
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Surface(
-                        shape = CircleShape,
-                        color = if (profile.soundEnabled) Color(0xFF00E676) else Color.White.copy(alpha = 0.3f),
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        IconButton(onClick = { viewModel.toggleSound() }) {
-                            Text(if (profile.soundEnabled) "🔊" else "🔇", fontSize = 14.sp)
-                        }
+                // VIP Pass Button
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFFFFD54F),
+                    modifier = Modifier.clickable {
+                        SoundManager.playButtonClick()
+                        shopInitialTab = 0
+                        showVipShopDialog = true
                     }
-                    Surface(
-                        shape = CircleShape,
-                        color = if (profile.musicEnabled) Color(0xFFFF4081) else Color.White.copy(alpha = 0.3f),
-                        modifier = Modifier.size(36.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { viewModel.toggleMusic() }) {
-                            Text(if (profile.musicEnabled) "🎵" else "🔕", fontSize = 14.sp)
-                        }
+                        Text("👑", fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (profile.isVipActive) "VIP ACTIVE" else "GET VIP",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color(0xFF3E2723)
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.weight(0.15f))
+            Spacer(modifier = Modifier.weight(0.12f))
 
-            // Animated Candy Showcase Cluster
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
+            // Candy Wonderland Hero Banner Card
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
+                    .height(115.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .border(2.dp, Color.White.copy(alpha = 0.6f), RoundedCornerShape(22.dp)),
+                contentAlignment = Alignment.Center
             ) {
-                Box(modifier = Modifier.size(54.dp)) {
-                    CandyView(candy = Candy(1, CandyType.Strawberry, SpecialType.RocketRow))
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(modifier = Modifier.size(68.dp)) {
-                    CandyView(candy = Candy(2, CandyType.RainbowBomb, SpecialType.Rainbow))
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(modifier = Modifier.size(54.dp)) {
-                    CandyView(candy = Candy(3, CandyType.Lemon, SpecialType.Bomb))
+                Image(
+                    painter = painterResource(id = R.drawable.img_candy_banner),
+                    contentDescription = "Candy Kingdom Wonderland",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                // Overlay animated candy showcase
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(modifier = Modifier.size(50.dp)) {
+                        CandyView(candy = Candy(1, CandyType.Strawberry, SpecialType.RocketRow))
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Box(modifier = Modifier.size(64.dp)) {
+                        CandyView(candy = Candy(2, CandyType.RainbowBomb, SpecialType.Rainbow))
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Box(modifier = Modifier.size(50.dp)) {
+                        CandyView(candy = Candy(3, CandyType.Lemon, SpecialType.Bomb))
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Crush Candy Title
+            // Bonbon Bloom Title
             Text(
-                text = "CRUSH CANDY",
-                fontSize = 42.sp,
+                text = "BONBON BLOOM",
+                fontSize = 40.sp,
                 fontWeight = FontWeight.Black,
                 color = Color.White,
                 letterSpacing = 2.sp,
@@ -261,7 +462,7 @@ fun HomeScreen(
                 modifier = Modifier.padding(top = 4.dp)
             ) {
                 Text(
-                    text = "  SAGA DELUXE  ",
+                    text = "  SWEET PUZZLE  ",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color(0xFF5D4037)
@@ -282,12 +483,17 @@ fun HomeScreen(
                 Button(
                     onClick = {
                         SoundManager.playButtonClick()
-                        onQuickPlayClicked(profile.highestUnlockedLevel)
+                        if (profile.lives > 0 || profile.hasInfiniteLives) {
+                            onQuickPlayClicked(profile.highestUnlockedLevel)
+                        } else {
+                            shopInitialTab = 0
+                            showVipShopDialog = true
+                        }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(64.dp),
-                    shape = RoundedCornerShape(32.dp),
+                        .height(60.dp),
+                    shape = RoundedCornerShape(30.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
                 ) {
@@ -299,7 +505,7 @@ fun HomeScreen(
                     )
                 }
 
-                // Adventure Map Button
+                // Adventure Map Button (1-1000 Levels)
                 Button(
                     onClick = {
                         SoundManager.playButtonClick()
@@ -307,17 +513,91 @@ fun HomeScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(28.dp),
+                        .height(52.dp),
+                    shape = RoundedCornerShape(26.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9100)),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
                 ) {
                     Text(
-                        text = "🗺️ ADVENTURE MAP (1-100)",
-                        fontSize = 16.sp,
+                        text = "🗺️ SAGA WORLD MAP (1–1,000 LEVELS)",
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
+                }
+
+                // Grid of 2 Glassmorphic Feature Cards: Lucky Wheel & Piggy Bank
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Lucky Wheel Card
+                    Surface(
+                        onClick = {
+                            SoundManager.playButtonClick()
+                            showLuckyWheelDialog = true
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.White.copy(alpha = 0.16f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("🎡", fontSize = 26.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Lucky Wheel", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color.White)
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (profile.freeLuckySpinsCount > 0) Color(0xFFFFD54F) else Color.White.copy(alpha = 0.2f),
+                                modifier = Modifier.padding(top = 2.dp)
+                            ) {
+                                Text(
+                                    text = if (profile.freeLuckySpinsCount > 0) "SPIN FREE" else "WATCH AD",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (profile.freeLuckySpinsCount > 0) Color(0xFF3E2723) else Color.White,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Piggy Bank Card
+                    Surface(
+                        onClick = {
+                            SoundManager.playButtonClick()
+                            showPiggyBankDialog = true
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.White.copy(alpha = 0.16f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("🐷", fontSize = 26.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Piggy Bank", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color.White)
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFFF80AB),
+                                modifier = Modifier.padding(top = 2.dp)
+                            ) {
+                                Text(
+                                    text = "${profile.piggyBankCoins} 🟡",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF26123D),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
                 }
 
                 // Royal VIP Pass & Diamond Store Card
@@ -327,7 +607,7 @@ fun HomeScreen(
                         shopInitialTab = 0
                         showVipShopDialog = true
                     },
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(22.dp),
                     color = Color.Transparent,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -336,7 +616,7 @@ fun HomeScreen(
                             brush = Brush.horizontalGradient(
                                 listOf(Color(0xFFFFD54F), Color(0xFFFF4081), Color(0xFF00E5FF))
                             ),
-                            shape = RoundedCornerShape(24.dp)
+                            shape = RoundedCornerShape(22.dp)
                         )
                 ) {
                     Box(
@@ -346,7 +626,7 @@ fun HomeScreen(
                                     listOf(Color(0xFF4A148C), Color(0xFF6A1B9A), Color(0xFF311B92))
                                 )
                             )
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -358,21 +638,21 @@ fun HomeScreen(
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text(
-                                        text = if (profile.isVipActive) "ROYAL VIP ACTIVE 👑" else "ROYAL VIP PASS & STORE",
-                                        fontSize = 14.sp,
+                                        text = if (profile.isVipActive) "ROYAL VIP ACTIVE 👑" else "ROYAL VIP HUB & STORE",
+                                        fontSize = 13.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color(0xFFFFD54F)
                                     )
                                     Text(
-                                        text = if (profile.isVipActive) "♾️ Unlimited Lives & 2X Coins" else "Unlimited Lives, 💎 Diamonds & Boosters",
-                                        fontSize = 11.sp,
+                                        text = if (profile.isVipActive) "♾️ Unlimited Lives & 2X Coins" else "Infinite Lives, 💎 Diamonds & Boosters",
+                                        fontSize = 10.sp,
                                         color = Color.White.copy(alpha = 0.85f),
                                         maxLines = 1
                                     )
                                 }
                             }
                             Surface(
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 color = Color(0xFFFFD54F)
                             ) {
                                 Text(
@@ -385,26 +665,6 @@ fun HomeScreen(
                             }
                         }
                     }
-                }
-
-                // Daily Reward Button
-                Button(
-                    onClick = {
-                        SoundManager.playButtonClick()
-                        showDailyRewardDialog = true
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .height(48.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.25f))
-                ) {
-                    Text(
-                        text = "🎁 DAILY REWARD WHEEL",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
                 }
 
                 // Watch Ad for Free Coins
@@ -424,14 +684,14 @@ fun HomeScreen(
                         }
                     },
                     modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .height(48.dp),
-                    shape = RoundedCornerShape(24.dp),
+                        .fillMaxWidth(0.9f)
+                        .height(44.dp),
+                    shape = RoundedCornerShape(22.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF673AB7).copy(alpha = 0.85f))
                 ) {
                     Text(
                         text = "📺 FREE COINS: WATCH AD (+150 🟡)",
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
@@ -445,6 +705,32 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp)
+            )
+        }
+
+        // Lucky Spin Wheel Dialog
+        if (showLuckyWheelDialog) {
+            LuckyWheelDialog(
+                profile = profile,
+                activity = activity,
+                onDismiss = { showLuckyWheelDialog = false },
+                onClaimReward = { prizeIdx, callback ->
+                    viewModel.claimLuckyWheelReward(prizeIdx, callback)
+                },
+                onGrantFreeSpin = {
+                    viewModel.grantFreeLuckySpin()
+                }
+            )
+        }
+
+        // Piggy Bank Dialog
+        if (showPiggyBankDialog) {
+            PiggyBankDialog(
+                profile = profile,
+                onDismiss = { showPiggyBankDialog = false },
+                onSmash = { callback ->
+                    viewModel.smashPiggyBank(callback)
+                }
             )
         }
 
@@ -476,7 +762,129 @@ fun HomeScreen(
                 onBuyBoosterWithCoins = { booster, cost -> viewModel.buyBooster(booster, cost) },
                 onGrantFreeReward = { booster -> viewModel.grantBoosterReward(booster, 1) },
                 onAddFreeCoins = { amount -> viewModel.addCoins(amount) },
-                onRefillLivesFree = { viewModel.refillLivesFree() }
+                onRefillLivesFree = { viewModel.refillLivesFree() },
+                onRecordPurchase = { method, email -> viewModel.recordPurchase(method, email) }
+            )
+        }
+
+        // Multi-Provider Login Dialog (Google, Email, Phone, Social, Guest)
+        if (showLoginDialog) {
+            LoginDialog(
+                currentEmail = profile.email,
+                onDismiss = { showLoginDialog = false },
+                onLoginWithGoogle = { email, name ->
+                    viewModel.loginWithGoogle(email, name)
+                },
+                onLoginWithEmail = { email, name ->
+                    viewModel.loginWithEmail(email, name)
+                },
+                onLoginWithPhone = { phone ->
+                    viewModel.loginWithPhone(phone)
+                },
+                onLoginWithSocial = { provider, name ->
+                    viewModel.loginWithSocial(provider, name)
+                },
+                onContinueAsGuest = {
+                    showLoginDialog = false
+                }
+            )
+        }
+
+        // Player Account & Cloud Sync Profile Dialog
+        if (showAccountDialog) {
+            AccountProfileDialog(
+                profile = profile,
+                onDismiss = { showAccountDialog = false },
+                onOpenLoginDialog = {
+                    showAccountDialog = false
+                    showLoginDialog = true
+                },
+                onOpenSecurityDialog = {
+                    showAccountDialog = false
+                    showSecurityDialog = true
+                },
+                onLogout = {
+                    viewModel.logout()
+                },
+                onDeleteAccount = {
+                    viewModel.deleteAccount()
+                }
+            )
+        }
+
+        // Anti-Cheat & Fair Play Security Guard Dialog
+        if (showSecurityDialog) {
+            SecurityStatusDialog(
+                profile = profile,
+                onDismiss = { showSecurityDialog = false },
+                onClearSecurityAlert = {
+                    viewModel.clearSecurityAlert()
+                }
+            )
+        }
+
+        // Settings, Audio, Privacy & Compliance Dialog
+        if (showSettingsDialog) {
+            SettingsDialog(
+                profile = profile,
+                activity = activity,
+                onDismiss = { showSettingsDialog = false },
+                onToggleSound = { viewModel.toggleSound() },
+                onToggleMusic = { viewModel.toggleMusic() },
+                onToggleHaptics = { viewModel.toggleHaptics(it) },
+                onLanguageSelected = { viewModel.setLanguage(it) },
+                onDeleteMyData = { viewModel.deleteAccount() },
+                onSandboxAddCoins = { viewModel.addCoins(5000) },
+                onSandboxAddDiamonds = { viewModel.addDiamonds(200) },
+                onSandboxRefillLives = { viewModel.refillLivesFree() },
+                onSandboxGrantInfiniteLives = { viewModel.grantInfiniteLives(2) },
+                onSandboxGrantBoosters = { viewModel.grantAllBoosters(5) },
+                onSandboxUnlockAllLevels = { viewModel.unlockLevels(1000) },
+                onSandboxRemoveAds = { viewModel.grantSandboxRemoveAds() },
+                onSandboxGrantVip = { viewModel.subscribeVip(7) }
+            )
+        }
+
+        // Educational Notification Permission Request Dialog (Android 13+ deferred after level 1)
+        if (showNotificationRationaleDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    showNotificationRationaleDialog = false
+                    viewModel.markNotificationPermissionAsked()
+                },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("🌸 Stay in Full Bloom!", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF673AB7))
+                    }
+                },
+                text = {
+                    Text(
+                        "Great job completing your first level! Enable notifications so we can alert you when your 5 hearts are fully refilled and your daily lucky spin is ready.",
+                        fontSize = 13.sp
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showNotificationRationaleDialog = false
+                            viewModel.markNotificationPermissionAsked()
+                            (activity as? MainActivity)?.requestPermissionLauncher?.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C853))
+                    ) {
+                        Text("Turn On", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showNotificationRationaleDialog = false
+                            viewModel.markNotificationPermissionAsked()
+                        }
+                    ) {
+                        Text("Not Now", color = Color.Gray)
+                    }
+                }
             )
         }
     }

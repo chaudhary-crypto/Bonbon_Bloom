@@ -1,0 +1,36 @@
+<resources>
+    <string name="app_name">Bonbon Bloom</string>
+    <string name="settings_title">Paramètres</string>
+    <string name="sound_effects">Effets sonores</string>
+    <string name="music">Musique</string>
+    <string name="haptics">Vibration haptique</string>
+    <string name="language">Langue</string>
+    <string name="privacy_policy_title">Politique de confidentialité</string>
+    <string name="terms_of_service_title">Conditions d’utilisation</string>
+    <string name="restore_purchases">Restaurer les achats</string>
+    <string name="delete_my_data">Supprimer mes données</string>
+    <string name="privacy_options">Options de confidentialité</string>
+    <string name="vip_subscription_terms">Abonnement à renouvellement automatique. Le paiement est débité sur le compte Google Play à la confirmation. L’abonnement se renouvelle automatiquement à moins d’être résilié au moins 24 heures avant la fin de la période en cours. Gérez ou annulez à tout moment dans Google Play Store > Abonnements.</string>
+
+    <string name="level_title">Niveau %1$d</string>
+    <string name="moves_left">Coups: %1$d</string>
+    <string name="score_label">Score: %1$d</string>
+    <string name="target_label">Objectif</string>
+    <string name="sweet_praise">Délicieux !</string>
+    <string name="tasty_praise">Savoureux !</string>
+    <string name="bloom_blast">Explosion Bloom !</string>
+    <string name="level_complete">Niveau terminé !</string>
+    <string name="level_failed">Plus de coups !</string>
+    <string name="watch_ad_moves">Regarder une pub: +5 coups</string>
+    <string name="watch_ad_double_coins">Regarder une pub: 2x Pièces</string>
+    <string name="continue_button">Continuer</string>
+    <string name="retry_button">Réessayer</string>
+
+    <string name="shop_title">Boutique Sucrée</string>
+    <string name="vip_pass">Passe VIP Or</string>
+    <string name="remove_ads_title">Supprimer les pubs</string>
+    <string name="remove_ads_desc">Supprime définitivement toutes les bannières et pubs interstitielles !</string>
+    <string name="lucky_wheel_title">Roue de la chance</string>
+    <string name="daily_spin">Tour gratuit du jour</string>
+    <string name="piggy_bank_title">Tirelire</string>
+</resources>

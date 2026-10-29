@@ -1,3 +1,50 @@
 <resources>
-    <string name="app_name">Crush Candy</string>
+    <string name="app_name">Bonbon Bloom</string>
+
+    <!-- Default fallback identifiers for Firebase services when running in standalone mode -->
+    <string name="google_app_id" translatable="false">1:657577014676:android:ab354175b4a1417f</string>
+    <string name="gcm_defaultSenderId" translatable="false">657577014676</string>
+    <string name="default_web_client_id" translatable="false">657577014676-offline.apps.googleusercontent.com</string>
+    <string name="firebase_database_url" translatable="false">https://bonbon-bloom-offline.firebaseio.com</string>
+    <string name="google_api_key" translatable="false">AIzaSyDummyKeyForBonbonBloomOfflineBuild0</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyDummyKeyForBonbonBloomOfflineBuild0</string>
+    <string name="project_id" translatable="false">bonbon-bloom-standalone</string>
+    <string name="google_storage_bucket" translatable="false">bonbon-bloom-standalone.appspot.com</string>
+
+    <!-- General Compliance & Settings Strings -->
+    <string name="settings_title">Settings</string>
+    <string name="sound_effects">Sound Effects</string>
+    <string name="music">Music</string>
+    <string name="haptics">Haptic Vibration</string>
+    <string name="language">Language</string>
+    <string name="privacy_policy_title">Privacy Policy</string>
+    <string name="terms_of_service_title">Terms of Service</string>
+    <string name="restore_purchases">Restore Purchases</string>
+    <string name="delete_my_data">Delete My Data</string>
+    <string name="privacy_options">Privacy Options</string>
+    <string name="vip_subscription_terms">Auto-renewing subscription. Payment charged to Google Play account at confirmation. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in Google Play Store > Subscriptions.</string>
+
+    <!-- Gameplay & Objectives -->
+    <string name="level_title">Level %1$d</string>
+    <string name="moves_left">Moves: %1$d</string>
+    <string name="score_label">Score: %1$d</string>
+    <string name="target_label">Target</string>
+    <string name="sweet_praise">Sweet!</string>
+    <string name="tasty_praise">Tasty!</string>
+    <string name="bloom_blast">Bloom Blast!</string>
+    <string name="level_complete">Level Complete!</string>
+    <string name="level_failed">Out of Moves!</string>
+    <string name="watch_ad_moves">Watch ad: +5 moves</string>
+    <string name="watch_ad_double_coins">Watch ad: 2x Coins</string>
+    <string name="continue_button">Continue</string>
+    <string name="retry_button">Try Again</string>
+
+    <!-- Shop & Items -->
+    <string name="shop_title">Sweet Shop</string>
+    <string name="vip_pass">VIP Gold Pass</string>
+    <string name="remove_ads_title">Remove Ads</string>
+    <string name="remove_ads_desc">Permanently remove all banners and interstitial ads!</string>
+    <string name="lucky_wheel_title">Lucky Wheel</string>
+    <string name="daily_spin">Daily Free Spin</string>
+    <string name="piggy_bank_title">Piggy Bank</string>
 </resources>

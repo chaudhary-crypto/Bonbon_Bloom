@@ -1,0 +1,36 @@
+<resources>
+    <string name="app_name">बॉनबॉन ब्लूम</string>
+    <string name="settings_title">सेटिंग्स</string>
+    <string name="sound_effects">ध्वनि प्रभाव</string>
+    <string name="music">संगीत</string>
+    <string name="haptics">कंपन (हैप्टिक्स)</string>
+    <string name="language">भाषा</string>
+    <string name="privacy_policy_title">गोपनीयता नीति</string>
+    <string name="terms_of_service_title">सेवा की शर्तें</string>
+    <string name="restore_purchases">खरीदारी पुनर्स्थापित करें</string>
+    <string name="delete_my_data">मेरा डेटा हटाएं</string>
+    <string name="privacy_options">गोपनीयता विकल्प</string>
+    <string name="vip_subscription_terms">स्वतः नवीनीकरण सदस्यता। पुष्टि पर Google Play खाते से शुल्क लिया जाएगा। वर्तमान अवधि समाप्त होने से कम से कम 24 घंटे पहले रद्द न करने पर सदस्यता स्वतः नवीनीकृत हो जाएगी। Google Play Store > सदस्यताएं में कभी भी प्रबंधित या रद्द करें।</string>
+
+    <string name="level_title">स्तर %1$d</string>
+    <string name="moves_left">चालें: %1$d</string>
+    <string name="score_label">स्कोर: %1$d</string>
+    <string name="target_label">लक्ष्य</string>
+    <string name="sweet_praise">शानदार!</string>
+    <string name="tasty_praise">स्वादिष्ट!</string>
+    <string name="bloom_blast">ब्लूम ब्लास्ट!</string>
+    <string name="level_complete">स्तर पूरा हुआ!</string>
+    <string name="level_failed">चालें समाप्त!</string>
+    <string name="watch_ad_moves">विज्ञापन देखें: +5 चालें</string>
+    <string name="watch_ad_double_coins">विज्ञापन देखें: 2x सिक्के</string>
+    <string name="continue_button">आगे बढ़ें</string>
+    <string name="retry_button">पुनः प्रयास करें</string>
+
+    <string name="shop_title">स्वीट शॉप</string>
+    <string name="vip_pass">वीआईपी गोल्ड पास</string>
+    <string name="remove_ads_title">विज्ञापन हटाएं</string>
+    <string name="remove_ads_desc">सभी बैनर और इंटरस्टिशियल विज्ञापनों को स्थायी रूप से हटाएं!</string>
+    <string name="lucky_wheel_title">लकी व्हील</string>
+    <string name="daily_spin">दैनिक मुफ्त स्पिन</string>
+    <string name="piggy_bank_title">पिग्गी बैंक</string>
+</resources>

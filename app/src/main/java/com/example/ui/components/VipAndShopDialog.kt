@@ -57,6 +57,8 @@ data class PurchaseConfirmInfo(
     val title: String,
     val description: String,
     val priceText: String,
+    val productId: String = "",
+    val isSubscription: Boolean = false,
     val onConfirm: () -> Unit
 )
 
@@ -75,11 +77,13 @@ fun VipAndShopDialog(
     onBuyBoosterWithCoins: (BoosterType, Int) -> Unit,
     onGrantFreeReward: (BoosterType) -> Unit,
     onAddFreeCoins: (Int) -> Unit,
-    onRefillLivesFree: () -> Unit
+    onRefillLivesFree: () -> Unit,
+    onRecordPurchase: ((String, String?) -> Unit)? = null
 ) {
     var selectedTab by remember { mutableIntStateOf(initialTab.coerceIn(0, 3)) }
     var pendingPurchase by remember { mutableStateOf<PurchaseConfirmInfo?>(null) }
     var purchaseSuccessMessage by remember { mutableStateOf<String?>(null) }
+    var isRestoringPurchases by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -117,16 +121,34 @@ fun VipAndShopDialog(
                         )
                     }
 
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.2f),
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.clickable(onClick = onDismiss)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(
+                            onClick = {
+                                isRestoringPurchases = true
+                                com.example.payment.PlayBillingManager.queryAndRestorePurchases { success, items ->
+                                    isRestoringPurchases = false
+                                    purchaseSuccessMessage = if (items.isNotEmpty()) {
+                                        "✓ Restored ${items.size} active purchases: ${items.joinToString(", ")}"
+                                    } else {
+                                        "No active purchases found to restore."
+                                    }
+                                }
+                            }
                         ) {
-                            Text("✕", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text("Restore", color = Color(0xFF80D8FF), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.2f),
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.clickable(onClick = onDismiss)
+                            ) {
+                                Text("✕", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            }
                         }
                     }
                 }
@@ -505,20 +527,20 @@ fun VipAndShopDialog(
         }
     }
 
-    // Google Play Simulated Purchase Dialog
+    // Google Play Billing Checkout Dialog
     pendingPurchase?.let { purchase ->
         AlertDialog(
             onDismissRequest = { pendingPurchase = null },
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("🛍️ Google Play Billing", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("🛍️ Google Play Checkout", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             },
             text = {
                 Column {
                     Text(purchase.title, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = Color(0xFF673AB7))
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(purchase.description, fontSize = 14.sp)
+                    Text(purchase.description, fontSize = 13.sp)
                     Spacer(modifier = Modifier.height(10.dp))
                     Surface(
                         shape = RoundedCornerShape(8.dp),
@@ -530,30 +552,70 @@ fun VipAndShopDialog(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Total due today:", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text("Total:", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             Text(purchase.priceText, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF2E7D32))
                         }
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        "Test environment sandbox: One-tap instant simulated purchase.",
-                        fontSize = 11.sp,
-                        color = Color.Gray
-                    )
+
+                    if (purchase.isSubscription) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Auto-renewing subscription. Charged to your Google Play account upon confirmation. Cancel anytime in Google Play Store > Subscriptions.",
+                            fontSize = 11.sp,
+                            color = Color(0xFF616161),
+                            lineHeight = 14.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Official Google Play 1-Tap button
+                    Button(
+                        onClick = {
+                            val action = purchase.onConfirm
+                            val targetProductId = purchase.productId.ifEmpty { "coins_500" }
+                            pendingPurchase = null
+                            if (activity != null) {
+                                com.example.payment.PlayBillingManager.launchPurchaseFlow(
+                                    activity = activity,
+                                    productId = targetProductId,
+                                    isSubscription = purchase.isSubscription,
+                                    onSuccessFallback = {
+                                        onRecordPurchase?.invoke("GOOGLE_PLAY", null)
+                                        action()
+                                    }
+                                )
+                            } else {
+                                onRecordPurchase?.invoke("GOOGLE_PLAY", null)
+                                action()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C853)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Text("Pay with Google Play (${purchase.priceText})", fontWeight = FontWeight.Bold)
+                    }
+
+                    // Debug-only developer sandbox test button
+                    if (com.example.BuildConfig.DEBUG) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                val action = purchase.onConfirm
+                                pendingPurchase = null
+                                onRecordPurchase?.invoke("DEBUG_SANDBOX", null)
+                                action()
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth().height(36.dp)
+                        ) {
+                            Text("[DEBUG ONLY: Test Billing Sandbox]", fontSize = 11.sp, color = Color(0xFF7E57C2))
+                        }
+                    }
                 }
             },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val action = purchase.onConfirm
-                        pendingPurchase = null
-                        action()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C853))
-                ) {
-                    Text("1-Tap Buy", fontWeight = FontWeight.Bold)
-                }
-            },
+            confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { pendingPurchase = null }) {
                     Text("Cancel")
@@ -710,6 +772,16 @@ fun VipSubscriptionView(
                     ) {
                         Text("👑 1-MONTH ROYAL VIP - $7.99 (SAVE 35%)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Auto-renewing subscription. Payment charged to Google Play account at confirmation. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in Google Play Store > Subscriptions.",
+                        fontSize = 10.sp,
+                        color = Color.White.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 13.sp,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
                 }
             }
         }

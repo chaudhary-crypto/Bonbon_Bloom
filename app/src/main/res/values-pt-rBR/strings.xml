@@ -1,0 +1,36 @@
+<resources>
+    <string name="app_name">Bonbon Bloom</string>
+    <string name="settings_title">Configurações</string>
+    <string name="sound_effects">Efeitos sonoros</string>
+    <string name="music">Música</string>
+    <string name="haptics">Vibração tátil</string>
+    <string name="language">Idioma</string>
+    <string name="privacy_policy_title">Política de Privacidade</string>
+    <string name="terms_of_service_title">Termos de Serviço</string>
+    <string name="restore_purchases">Restaurar compras</string>
+    <string name="delete_my_data">Excluir meus dados</string>
+    <string name="privacy_options">Opções de privacidade</string>
+    <string name="vip_subscription_terms">Assinatura com renovação automática. O pagamento será cobrado na conta do Google Play na confirmação. A assinatura é renovada automaticamente, a menos que seja cancelada pelo menos 24 horas antes do final do período atual. Gerencie ou cancele a qualquer momento no Google Play Store > Assinaturas.</string>
+
+    <string name="level_title">Nível %1$d</string>
+    <string name="moves_left">Movimentos: %1$d</string>
+    <string name="score_label">Pontos: %1$d</string>
+    <string name="target_label">Objetivo</string>
+    <string name="sweet_praise">Doce!</string>
+    <string name="tasty_praise">Delicioso!</string>
+    <string name="bloom_blast">Explosão Bloom!</string>
+    <string name="level_complete">Nível Concluído!</string>
+    <string name="level_failed">Sem movimentos!</string>
+    <string name="watch_ad_moves">Ver anúncio: +5 movimentos</string>
+    <string name="watch_ad_double_coins">Ver anúncio: 2x Moedas</string>
+    <string name="continue_button">Continuar</string>
+    <string name="retry_button">Tentar novamente</string>
+
+    <string name="shop_title">Loja Doce</string>
+    <string name="vip_pass">Passe VIP Ouro</string>
+    <string name="remove_ads_title">Remover anúncios</string>
+    <string name="remove_ads_desc">Remova permanentemente todos os banners e anúncios intersticiais!</string>
+    <string name="lucky_wheel_title">Roda da Sorte</string>
+    <string name="daily_spin">Giro grátis diário</string>
+    <string name="piggy_bank_title">Cofrinho</string>
+</resources>

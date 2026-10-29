@@ -1,10 +1,109 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- 1. Ambient Drop Shadow under Candy -->
+    <path
+        android:fillColor="#3A000000"
+        android:pathData="M34,70 C34,70 42,75 54,75 C66,75 74,70 74,70 C70,77 62,80 54,80 C46,80 38,77 34,70 Z" />
+
+    <!-- 2. Left Wrapper Fan / Ribbon -->
+    <path android:pathData="M38,54 L24,40 C24,40 22,50 22,54 C22,58 24,68 24,68 L38,54 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:angle="0"
+                android:startColor="#FF4081"
+                android:endColor="#F50057"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
+    <!-- Left Wrapper Pleat Highlight -->
+    <path
+        android:fillColor="#55FFFFFF"
+        android:pathData="M38,54 L24,40 L26,46 L38,54 L24,54 L26,58 L38,54 Z" />
+
+    <!-- 3. Right Wrapper Fan / Ribbon -->
+    <path android:pathData="M70,54 L84,40 C84,40 86,50 86,54 C86,58 84,68 84,68 L70,54 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:angle="180"
+                android:startColor="#FF4081"
+                android:endColor="#F50057"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
+    <!-- Right Wrapper Pleat Highlight -->
+    <path
+        android:fillColor="#55FFFFFF"
+        android:pathData="M70,54 L84,40 L82,46 L70,54 L84,54 L82,58 L70,54 Z" />
+
+    <!-- 4. Wrapper Tie Ribbons (Golden Bands) -->
+    <path
+        android:fillColor="#FFD54F"
+        android:pathData="M36,49 C36,49 35,54 36,59 C38,59 38,49 36,49 Z M72,49 C72,49 73,54 72,59 C70,59 70,49 72,49 Z" />
+
+    <!-- 5. Main 3D Candy Sphere (Center 54, 54, Radius 21) -->
+    <path android:pathData="M54,33 C65.598,33 75,42.402 75,54 C75,65.598 65.598,75 54,75 C42.402,75 33,65.598 33,54 C33,42.402 42.402,33 54,33 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="48"
+                android:centerY="46"
+                android:gradientRadius="24"
+                android:startColor="#FF5252"
+                android:centerColor="#D50000"
+                android:endColor="#880E4F"
+                android:type="radial" />
+        </aapt:attr>
+    </path>
+
+    <!-- 6. Peppermint Pinwheel Swirl Ribbons (Candy Stripes) -->
+    <path
+        android:fillColor="#EEFFFFFF"
+        android:pathData="M54,54 C54,42 62,35 68,39 C62,45 58,54 54,54 Z" />
+    <path
+        android:fillColor="#EEFFFFFF"
+        android:pathData="M54,54 C66,54 73,62 69,68 C63,62 54,58 54,54 Z" />
+    <path
+        android:fillColor="#EEFFFFFF"
+        android:pathData="M54,54 C54,66 46,73 40,69 C46,63 50,54 54,54 Z" />
+    <path
+        android:fillColor="#EEFFFFFF"
+        android:pathData="M54,54 C42,54 35,46 39,40 C45,46 54,50 54,54 Z" />
+
+    <!-- 7. Yellow Sugar Accent Swirls -->
+    <path
+        android:fillColor="#FFFFEE58"
+        android:pathData="M54,54 C58,45 68,48 66,52 C61,50 56,53 54,54 Z M54,54 C50,63 40,60 42,56 C47,58 52,55 54,54 Z" />
+
+    <!-- 8. Specular 3D Gloss Highlight Arc (Upper Left Shine) -->
+    <path android:pathData="M40,43 C43,38 49,35 55,35 C53,37 47,39 44,44 C42,47 41,51 41,51 C40,48 40,45 40,43 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:angle="135"
+                android:startColor="#FFFFFFFF"
+                android:endColor="#66FFFFFF"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
+    <!-- Secondary Tiny Specular Dot -->
+    <path
+        android:fillColor="#CCFFFFFF"
+        android:pathData="M59,38 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+
+    <!-- 9. Sparkling Golden 4-Point Star Twinkle (Upper Right) -->
+    <path
+        android:fillColor="#FFF176"
+        android:pathData="M73,35 L74.5,39 L78.5,40.5 L74.5,42 L73,46 L71.5,42 L67.5,40.5 L71.5,39 Z" />
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,20 l8.5,26.5 h27.5 l-22.5,16 l8.5,26.5 l-22.5,-16 l-22.5,16 l8.5,-26.5 l-22.5,-16 h27.5 z" />
+        android:pathData="M73,38.5 a2,2 0 1,0 0.01,0 Z" />
+
+    <!-- 10. Mini Diamond Sparkle (Lower Left) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M31,64 L32.5,66.5 L35,68 L32.5,69.5 L31,72 L29.5,69.5 L27,68 L29.5,66.5 Z" />
 </vector>

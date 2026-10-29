@@ -1,15 +1,17 @@
 package com.example.ads
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.payment.PlayBillingManager
 import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
@@ -37,6 +40,14 @@ fun BannerAdView(
 ) {
     val context = LocalContext.current
     val isInEditMode = LocalInspectionMode.current
+    val hasRemovedAds by PlayBillingManager.hasRemovedAds.collectAsState()
+
+    // If player purchased Remove Ads, do not display or load banners
+    if (hasRemovedAds) {
+        Box(modifier = Modifier.size(0.dp))
+        return
+    }
+
     var isAdLoaded by remember { mutableStateOf(false) }
     var adLoadFailed by remember { mutableStateOf(false) }
 
@@ -53,30 +64,13 @@ fun BannerAdView(
         return
     }
 
-    val adView = remember {
-        AdView(context).apply {
-            setAdSize(AdSize.BANNER)
-            this.adUnitId = adUnitId
-            adListener = object : AdListener() {
-                override fun onAdLoaded() {
-                    isAdLoaded = true
-                    adLoadFailed = false
-                }
+    var adViewRef by remember { mutableStateOf<AdView?>(null) }
 
-                override fun onAdFailedToLoad(error: LoadAdError) {
-                    isAdLoaded = false
-                    adLoadFailed = true
-                }
-            }
-            loadAd(AdRequest.Builder().build())
-        }
-    }
-
-    DisposableEffect(adView) {
+    DisposableEffect(Unit) {
         onDispose {
             try {
-                adView.destroy()
-            } catch (_: Exception) {}
+                adViewRef?.destroy()
+            } catch (_: Throwable) {}
         }
     }
 
@@ -90,7 +84,31 @@ fun BannerAdView(
         contentAlignment = Alignment.Center
     ) {
         AndroidView(
-            factory = { adView },
+            factory = { ctx ->
+                try {
+                    val view = AdView(ctx)
+                    adViewRef = view
+                    view.setAdSize(AdSize.BANNER)
+                    view.adUnitId = adUnitId
+                    view.adListener = object : AdListener() {
+                        override fun onAdLoaded() {
+                            isAdLoaded = true
+                            adLoadFailed = false
+                        }
+
+                        override fun onAdFailedToLoad(error: LoadAdError) {
+                            isAdLoaded = false
+                            adLoadFailed = true
+                        }
+                    }
+                    view.loadAd(AdRequest.Builder().build())
+                    view
+                } catch (e: Throwable) {
+                    Log.w("BannerAdView", "AdView creation skipped safely: ${e.message}")
+                    adLoadFailed = true
+                    android.view.View(ctx)
+                }
+            },
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -104,7 +122,7 @@ fun BannerAdView(
             )
         } else if (adLoadFailed) {
             Text(
-                text = "Crush Candy • Ad Space",
+                text = "Bonbon Bloom • Ad Space",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.LightGray

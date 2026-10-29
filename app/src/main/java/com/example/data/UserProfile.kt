@@ -25,7 +25,33 @@ data class UserProfile(
     val vipExpiryTimestamp: Long = 0L,
     val infiniteLivesExpiryTimestamp: Long = 0L,
     val lastVipDailyClaim: Long = 0L,
-    val lastDailyClaimDay: Long = 0L
+    val lastDailyClaimDay: Long = 0L,
+    // Authentication & Account Options
+    val isLoggedIn: Boolean = false,
+    val authProvider: String = "GUEST", // "GUEST", "GOOGLE", "EMAIL", "PHONE", "FACEBOOK", "APPLE"
+    val email: String? = null,
+    val authUid: String? = null,
+    val avatarUrl: String? = null,
+    val lastCloudSyncTime: Long = 0L,
+    // Anti-Hacking & Security Protection
+    val securitySignature: String = "",
+    val isCheatingDetected: Boolean = false,
+    val lastSecurityScanTime: Long = 0L,
+    val cheatAttemptsCount: Int = 0,
+    // Payment & Alternative Checkout
+    val lastPaymentMethod: String = "GOOGLE_PLAY", // "GOOGLE_PLAY", "PAYPAL", "CREDIT_CARD"
+    val paypalEmail: String? = null,
+    val totalPurchasesCount: Int = 0,
+    // Premium Meta Features: Piggy Bank & Lucky Spin Wheel
+    val piggyBankCoins: Int = 0,
+    val piggyBankCapacity: Int = 1000,
+    val lastLuckyWheelSpinDate: Long = 0L,
+    val freeLuckySpinsCount: Int = 1,
+    // Compliance, Settings, and Preferences
+    val hasRemovedAds: Boolean = false,
+    val hapticsEnabled: Boolean = true,
+    val languageCode: String = "en",
+    val hasAskedNotificationPermission: Boolean = false
 ) {
     val isVipActive: Boolean
         get() = isVipSubscribed && vipExpiryTimestamp > System.currentTimeMillis()

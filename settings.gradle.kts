@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Crush Candy"
+rootProject.name = "Bonbon Bloom"
 
 include(":app")

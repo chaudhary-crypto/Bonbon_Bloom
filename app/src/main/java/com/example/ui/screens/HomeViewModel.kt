@@ -34,6 +34,24 @@ class HomeViewModel(private val repository: UserRepository) : ViewModel() {
         }
     }
 
+    fun toggleHaptics(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.toggleHaptics(enabled)
+        }
+    }
+
+    fun setLanguage(languageCode: String) {
+        viewModelScope.launch {
+            repository.setLanguage(languageCode)
+        }
+    }
+
+    fun markNotificationPermissionAsked() {
+        viewModelScope.launch {
+            repository.markNotificationPermissionAsked()
+        }
+    }
+
     fun refillLives() {
         viewModelScope.launch {
             repository.refillLives(100)
@@ -114,6 +132,103 @@ class HomeViewModel(private val repository: UserRepository) : ViewModel() {
 
     fun skipLevel(levelId: Int) {
         skipLevelWithDiamonds(levelId)
+    }
+
+    // --- Piggy Bank & Lucky Wheel Actions ---
+    fun smashPiggyBank(onSuccess: (Int) -> Unit = {}) {
+        viewModelScope.launch {
+            val amount = repository.smashPiggyBank()
+            onSuccess(amount)
+        }
+    }
+
+    fun claimLuckyWheelReward(rewardIndex: Int, onResult: (Pair<String, Int>) -> Unit = {}) {
+        viewModelScope.launch {
+            val res = repository.claimLuckyWheelReward(rewardIndex)
+            onResult(res)
+        }
+    }
+
+    fun grantFreeLuckySpin() {
+        viewModelScope.launch {
+            repository.grantFreeLuckySpin()
+        }
+    }
+
+    // --- Authentication Actions ---
+    fun loginWithGoogle(email: String, displayName: String, photoUrl: String? = null) {
+        viewModelScope.launch {
+            repository.loginWithGoogle(email, displayName, photoUrl)
+        }
+    }
+
+    fun loginWithEmail(email: String, displayName: String? = null) {
+        viewModelScope.launch {
+            repository.loginWithEmail(email, displayName)
+        }
+    }
+
+    fun loginWithPhone(phoneNumber: String) {
+        viewModelScope.launch {
+            repository.loginWithPhone(phoneNumber)
+        }
+    }
+
+    fun loginWithSocial(provider: String, name: String) {
+        viewModelScope.launch {
+            repository.loginWithSocial(provider, name)
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            repository.logout()
+        }
+    }
+
+    fun deleteAccount() {
+        viewModelScope.launch {
+            repository.deleteAccount()
+        }
+    }
+
+    // --- Payment & Alternative Checkout ---
+    fun recordPurchase(method: String, paypalEmail: String? = null) {
+        viewModelScope.launch {
+            repository.recordPurchase(method, paypalEmail)
+        }
+    }
+
+    // --- Anti-Cheat & Security ---
+    fun clearSecurityAlert() {
+        viewModelScope.launch {
+            repository.clearSecurityAlert()
+        }
+    }
+
+    // --- Developer & QA Sandbox Controls ---
+    fun unlockLevels(upToLevel: Int) {
+        viewModelScope.launch {
+            repository.unlockLevels(upToLevel)
+        }
+    }
+
+    fun grantAllBoosters(count: Int = 5) {
+        viewModelScope.launch {
+            repository.grantAllBoosters(count)
+        }
+    }
+
+    fun grantInfiniteLives(hours: Int = 2) {
+        viewModelScope.launch {
+            repository.grantInfiniteLives(hours)
+        }
+    }
+
+    fun grantSandboxRemoveAds() {
+        viewModelScope.launch {
+            repository.setHasRemovedAds(true)
+        }
     }
 
     companion object {

@@ -42,9 +42,12 @@ class GameViewModel(
     fun startLevel(levelId: Int) {
         viewModelScope.launch {
             if (!hasDeductedLifeForCurrentGame) {
-                repository.deductLife()
-                hasDeductedLifeForCurrentGame = true
+                val hasLife = repository.deductLife()
+                if (hasLife) {
+                    hasDeductedLifeForCurrentGame = true
+                }
             }
+            // Always load the level so the game board is never blank or hanging
             engine.loadLevel(levelId)
         }
     }

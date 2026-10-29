@@ -1,6 +1,6 @@
 {
-  "name": "Crush Candy",
-  "description": "Crush Candy - An addictive, premium match-3 puzzle game featuring colorful candies, exciting combos, challenging levels, and Google Ads rewards.",
+  "name": "Bonbon Bloom",
+  "description": "Bonbon Bloom - A polished, high-revenue match-3 puzzle game featuring delicious bonbons, blossom combos, challenging levels, and Play Store compliance.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

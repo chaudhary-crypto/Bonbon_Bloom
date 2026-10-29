@@ -1,0 +1,36 @@
+<resources>
+    <string name="app_name">Bonbon Bloom</string>
+    <string name="settings_title">Pengaturan</string>
+    <string name="sound_effects">Efek Suara</string>
+    <string name="music">Musik</string>
+    <string name="haptics">Getaran Haptik</string>
+    <string name="language">Bahasa</string>
+    <string name="privacy_policy_title">Kebijakan Privasi</string>
+    <string name="terms_of_service_title">Ketentuan Layanan</string>
+    <string name="restore_purchases">Pulihkan Pembelian</string>
+    <string name="delete_my_data">Hapus Data Saya</string>
+    <string name="privacy_options">Opsi Privasi</string>
+    <string name="vip_subscription_terms">Langganan yang diperpanjang otomatis. Pembayaran dibebankan ke akun Google Play saat konfirmasi. Langganan diperpanjang otomatis kecuali dibatalkan setidaknya 24 jam sebelum akhir periode berjalan. Kelola atau batalkan kapan saja di Google Play Store > Langganan.</string>
+
+    <string name="level_title">Level %1$d</string>
+    <string name="moves_left">Langkah: %1$d</string>
+    <string name="score_label">Skor: %1$d</string>
+    <string name="target_label">Target</string>
+    <string name="sweet_praise">Manis!</string>
+    <string name="tasty_praise">Lezat!</string>
+    <string name="bloom_blast">Ledakan Bloom!</string>
+    <string name="level_complete">Level Selesai!</string>
+    <string name="level_failed">Langkah Habis!</string>
+    <string name="watch_ad_moves">Tonton iklan: +5 langkah</string>
+    <string name="watch_ad_double_coins">Tonton iklan: 2x Koin</string>
+    <string name="continue_button">Lanjutkan</string>
+    <string name="retry_button">Coba Lagi</string>
+
+    <string name="shop_title">Toko Manis</string>
+    <string name="vip_pass">Tiket VIP Emas</string>
+    <string name="remove_ads_title">Hapus Iklan</string>
+    <string name="remove_ads_desc">Hapus semua banner dan iklan interstisial secara permanen!</string>
+    <string name="lucky_wheel_title">Roda Keberuntungan</string>
+    <string name="daily_spin">Putaran Gratis Harian</string>
+    <string name="piggy_bank_title">Celengan Babi</string>
+</resources>

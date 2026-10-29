@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,14 +56,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import android.app.Activity
 import androidx.compose.ui.platform.LocalContext
+import com.example.R
 import com.example.ads.AdManager
 import com.example.audio.SoundManager
 import com.example.game.BoosterType
@@ -152,6 +157,7 @@ fun GameScreen(
             GameTopHeader(
                 levelId = level.id,
                 worldName = level.worldName,
+                score = score,
                 profile = profile,
                 soundEnabled = profile.soundEnabled,
                 musicEnabled = profile.musicEnabled,
@@ -247,14 +253,14 @@ fun GameScreen(
                 activity = activity,
                 onNextLevel = {
                     val proceed = {
-                        if (level.id < 100) {
+                        if (level.id < 1000) {
                             viewModel.startLevel(level.id + 1)
                         } else {
                             onNavigateBack()
                         }
                     }
                     activity?.let { act ->
-                        AdManager.showInterstitial(act) { proceed() }
+                        AdManager.showInterstitial(act, force = true) { proceed() }
                     } ?: proceed()
                 },
                 onDoubleCoins = { extraCoins ->
@@ -262,7 +268,7 @@ fun GameScreen(
                 },
                 onReplay = {
                     activity?.let { act ->
-                        AdManager.showInterstitial(act) { viewModel.retryLevel() }
+                        AdManager.showInterstitial(act, force = true) { viewModel.retryLevel() }
                     } ?: viewModel.retryLevel()
                 },
                 onBackToMap = onNavigateBack
@@ -284,9 +290,33 @@ fun GameScreen(
                     showInGameShopDialog = true
                 },
                 onRetry = {
-                    activity?.let { act ->
-                        AdManager.showInterstitial(act) { viewModel.retryLevel() }
-                    } ?: viewModel.retryLevel()
+                    if (profile.lives > 0 || profile.hasInfiniteLives) {
+                        activity?.let { act ->
+                            AdManager.showInterstitial(act, force = true) { viewModel.retryLevel() }
+                        } ?: viewModel.retryLevel()
+                    } else {
+                        // Out of lives: offer rewarded ad to refill a heart or open shop
+                        activity?.let { act ->
+                            AdManager.showRewarded(
+                                activity = act,
+                                onRewardEarned = {
+                                    viewModel.refillLivesFree()
+                                    viewModel.retryLevel()
+                                },
+                                onDismiss = {
+                                    if (profile.lives > 0) {
+                                        viewModel.retryLevel()
+                                    } else {
+                                        inGameShopTab = 0
+                                        showInGameShopDialog = true
+                                    }
+                                }
+                            )
+                        } ?: run {
+                            inGameShopTab = 0
+                            showInGameShopDialog = true
+                        }
+                    }
                 },
                 onBackToMap = onNavigateBack
             )
@@ -318,6 +348,7 @@ fun GameScreen(
 fun GameTopHeader(
     levelId: Int,
     worldName: String,
+    score: Int,
     profile: com.example.data.UserProfile,
     soundEnabled: Boolean,
     musicEnabled: Boolean,
@@ -355,6 +386,26 @@ fun GameTopHeader(
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White
                 )
+            }
+
+            // Score Tracker
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = Color(0xFFFFD54F).copy(alpha = 0.9f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🎯", fontSize = 11.sp)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "$score",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFF6A1B9A)
+                    )
+                }
             }
 
             // Lives
@@ -527,6 +578,22 @@ fun GameObjectiveShelf(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
+                // Objective progress bar
+                val objectiveFraction = when (objective) {
+                    is LevelObjective.TargetScore -> (score.toFloat() / objective.score.toFloat()).coerceIn(0f, 1f)
+                    is LevelObjective.ClearAllJelly -> (objectiveProgress.toFloat() / objective.total.toFloat()).coerceIn(0f, 1f)
+                    is LevelObjective.CollectCandy -> (objectiveProgress.toFloat() / objective.count.toFloat()).coerceIn(0f, 1f)
+                }
+                
+                LinearProgressIndicator(
+                    progress = { objectiveFraction },
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                    color = Color(0xFF00E676),
+                    trackColor = Color.White.copy(alpha = 0.25f),
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
                 // Score progress bar with Stars milestones
                 val progressFraction = (score.toFloat() / star3.toFloat()).coerceIn(0f, 1f)
                 Box(modifier = Modifier.fillMaxWidth().height(16.dp), contentAlignment = Alignment.CenterStart) {
@@ -546,22 +613,6 @@ fun GameObjectiveShelf(
                         Text(if (score >= star3) "⭐" else "☆", fontSize = 12.sp)
                     }
                 }
-            }
-
-            // Current Score Display
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "SCORE",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White.copy(alpha = 0.7f)
-                )
-                Text(
-                    text = "$score",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Black,
-                    color = Color.White
-                )
             }
         }
     }
@@ -584,7 +635,7 @@ fun GameBoardView(
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0x22000000))
             .padding(6.dp),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.TopStart
     ) {
         val cellSize = maxWidth / cols
 
@@ -660,7 +711,7 @@ fun AnimatedCandyTile(
 
     Box(
         modifier = Modifier
-            .offset(x = animatedX, y = animatedY)
+            .offset { IntOffset(animatedX.roundToPx(), animatedY.roundToPx()) }
             .size(cellSize)
             .pointerInput(Unit) {
                 var dragX = 0f
@@ -922,6 +973,15 @@ fun LevelWinDialog(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Image(
+                    painter = painterResource(id = R.drawable.img_candy_celebration),
+                    contentDescription = "Victory Celebration",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(105.dp)
+                        .padding(bottom = 6.dp),
+                    contentScale = ContentScale.Fit
+                )
                 Text(
                     text = "SWEET VICTORY! 🏆",
                     fontSize = 24.sp,
@@ -1014,9 +1074,9 @@ fun LevelWinDialog(
                         onClick = onReplay,
                         modifier = Modifier.weight(1f).height(44.dp),
                         shape = RoundedCornerShape(22.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB0BEC5))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF176))
                     ) {
-                        Text("Replay", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Text("🔄 Restart", color = Color(0xFFF57F17), fontWeight = FontWeight.Black, fontSize = 13.sp)
                     }
 
                     Spacer(modifier = Modifier.width(8.dp))
@@ -1025,9 +1085,9 @@ fun LevelWinDialog(
                         onClick = onBackToMap,
                         modifier = Modifier.weight(1f).height(44.dp),
                         shape = RoundedCornerShape(22.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB0BEC5))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE0E0E0))
                     ) {
-                        Text("Map", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Text("🏠 Main Menu", color = Color.DarkGray, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
             }
@@ -1140,7 +1200,7 @@ fun LevelGameOverDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // High Value Diamond Skip
-                if (levelId < 100) {
+                if (levelId < 1000) {
                     androidx.compose.material3.OutlinedButton(
                         onClick = {
                             if (playerDiamonds >= 30) {
@@ -1164,26 +1224,27 @@ fun LevelGameOverDialog(
 
                 Button(
                     onClick = onRetry,
-                    modifier = Modifier.fillMaxWidth().height(42.dp),
-                    shape = RoundedCornerShape(21.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE0E0E0))
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                    shape = RoundedCornerShape(23.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF176))
                 ) {
                     Text(
-                        text = if (hasInfiniteLives) "Retry (♾️ VIP FREE)" else "Retry (-1 ❤️)",
-                        color = Color.Black,
-                        fontWeight = FontWeight.Bold
+                        text = if (hasInfiniteLives) "🔄 Restart Level (♾️ VIP FREE)" else "🔄 Restart Level (-1 ❤️)",
+                        color = Color(0xFFE65100),
+                        fontWeight = FontWeight.Black,
+                        fontSize = 15.sp
                     )
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
                     onClick = onBackToMap,
-                    modifier = Modifier.fillMaxWidth().height(38.dp),
-                    shape = RoundedCornerShape(19.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEEEEEE))
                 ) {
-                    Text("Return to Map", color = Color.Gray, fontWeight = FontWeight.Bold)
+                    Text("🏠 Return to Main Menu", color = Color.DarkGray, fontWeight = FontWeight.Bold)
                 }
             }
         }

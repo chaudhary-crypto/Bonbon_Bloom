@@ -2,6 +2,7 @@ package com.example.data
 
 import com.example.audio.SoundManager
 import com.example.game.BoosterType
+import com.example.security.AntiCheatManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
@@ -9,8 +10,15 @@ import kotlinx.coroutines.flow.map
 class UserRepository(private val userDao: UserDao) {
     val userProfile: Flow<UserProfile> = userDao.getUserProfile().map { raw ->
         val profile = raw ?: UserProfile()
+        // Verify cryptographic signature integrity
+        val isTampered = !AntiCheatManager.verifySignature(profile) && profile.securitySignature.isNotEmpty()
+        val checked = if (isTampered) {
+            profile.copy(isCheatingDetected = true, cheatAttemptsCount = profile.cheatAttemptsCount + 1)
+        } else {
+            profile
+        }
         // Check life regeneration (1 life every 30 minutes, max 5)
-        checkLifeRegeneration(profile)
+        checkLifeRegeneration(checked)
     }
 
     val allLevelProgress: Flow<List<LevelProgress>> = userDao.getAllLevelProgress()
@@ -30,15 +38,25 @@ class UserRepository(private val userDao: UserDao) {
     }
 
     suspend fun saveProfile(profile: UserProfile) {
-        userDao.saveUserProfile(profile)
+        val signed = AntiCheatManager.signProfile(profile)
+        userDao.saveUserProfile(signed)
+        try {
+            com.example.auth.CloudSyncManager.syncToCloud(signed)
+        } catch (e: Exception) {
+            // Ignore error
+        }
     }
 
     suspend fun addCoins(amount: Int) {
-        userDao.addCoins(amount)
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val updated = current.copy(coins = (current.coins + amount).coerceAtLeast(0))
+        saveProfile(updated)
     }
 
     suspend fun addDiamonds(amount: Int) {
-        userDao.addDiamonds(amount)
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val updated = current.copy(diamonds = (current.diamonds + amount).coerceAtLeast(0))
+        saveProfile(updated)
     }
 
     suspend fun deductLife(): Boolean {
@@ -93,17 +111,19 @@ class UserRepository(private val userDao: UserDao) {
 
     suspend fun completeLevel(levelId: Int, stars: Int, score: Int, coinReward: Int) {
         val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
-        val nextLevel = (levelId + 1).coerceAtMost(100)
+        val nextLevel = (levelId + 1).coerceAtMost(1000)
         val highest = maxOf(current.highestUnlockedLevel, nextLevel)
 
         // VIP Pass gives 2x Coins
         val finalReward = if (current.isVipActive) coinReward * 2 else coinReward
+        val newPiggy = (current.piggyBankCoins + 50).coerceAtMost(current.piggyBankCapacity)
 
         val updated = current.copy(
             coins = current.coins + finalReward,
+            piggyBankCoins = newPiggy,
             highestUnlockedLevel = highest
         )
-        userDao.saveUserProfile(updated)
+        saveProfile(updated)
 
         val existingProgress = userDao.getLevelProgress(levelId)
         val bestStars = maxOf(existingProgress?.stars ?: 0, stars)
@@ -268,13 +288,13 @@ class UserRepository(private val userDao: UserDao) {
     suspend fun skipLevelWithDiamonds(levelId: Int, cost: Int = 30): Boolean {
         val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
         if (current.diamonds < cost) return false
-        val nextLevel = (levelId + 1).coerceAtMost(100)
+        val nextLevel = (levelId + 1).coerceAtMost(1000)
         val highest = maxOf(current.highestUnlockedLevel, nextLevel)
         val updated = current.copy(
             diamonds = current.diamonds - cost,
             highestUnlockedLevel = highest
         )
-        userDao.saveUserProfile(updated)
+        saveProfile(updated)
         userDao.saveLevelProgress(
             LevelProgress(
                 levelId = levelId,
@@ -284,6 +304,62 @@ class UserRepository(private val userDao: UserDao) {
             )
         )
         return true
+    }
+
+    // --- Piggy Bank & Lucky Spin Wheel Operations ---
+
+    suspend fun smashPiggyBank(): Int {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val collected = current.piggyBankCoins
+        if (collected <= 0) return 0
+        val updated = current.copy(
+            coins = current.coins + collected,
+            piggyBankCoins = 0
+        )
+        saveProfile(updated)
+        return collected
+    }
+
+    suspend fun claimLuckyWheelReward(rewardIndex: Int): Pair<String, Int> {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val updated = when (rewardIndex % 8) {
+            0 -> current.copy(coins = current.coins + 250) // 250 Coins
+            1 -> current.copy(diamonds = current.diamonds + 10) // 10 Diamonds
+            2 -> current.copy(hammerCount = current.hammerCount + 1) // 1 Hammer
+            3 -> current.copy(extraMovesCount = current.extraMovesCount + 2) // +2 Moves
+            4 -> current.copy(coins = current.coins + 500) // 500 Coins
+            5 -> current.copy(colorBlastCount = current.colorBlastCount + 1) // 1 Color Blast
+            6 -> {
+                // 1 hour infinite lives
+                val currentExpiry = maxOf(current.infiniteLivesExpiryTimestamp, System.currentTimeMillis())
+                current.copy(infiniteLivesExpiryTimestamp = currentExpiry + 3600 * 1000L)
+            }
+            else -> current.copy(shuffleCount = current.shuffleCount + 2) // 2 Shuffles
+        }.let {
+            it.copy(
+                lastLuckyWheelSpinDate = System.currentTimeMillis(),
+                freeLuckySpinsCount = maxOf(0, it.freeLuckySpinsCount - 1)
+            )
+        }
+        saveProfile(updated)
+
+        val rewardInfo = when (rewardIndex % 8) {
+            0 -> "250 Coins" to 250
+            1 -> "10 Diamonds" to 10
+            2 -> "1 Lollipop Hammer" to 1
+            3 -> "+2 Extra Moves" to 2
+            4 -> "500 Coins" to 500
+            5 -> "1 Color Blast" to 1
+            6 -> "1 Hr Infinite Lives" to 1
+            else -> "2 Shuffles" to 2
+        }
+        return rewardInfo
+    }
+
+    suspend fun grantFreeLuckySpin() {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val updated = current.copy(freeLuckySpinsCount = current.freeLuckySpinsCount + 1)
+        saveProfile(updated)
     }
 
     suspend fun toggleSound() {
@@ -298,5 +374,154 @@ class UserRepository(private val userDao: UserDao) {
         val newMusic = !current.musicEnabled
         SoundManager.musicEnabled = newMusic
         userDao.saveUserProfile(current.copy(musicEnabled = newMusic))
+    }
+
+    suspend fun toggleHaptics(enabled: Boolean) {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        com.example.audio.HapticManager.hapticsEnabled = enabled
+        saveProfile(current.copy(hapticsEnabled = enabled))
+    }
+
+    suspend fun setLanguage(languageCode: String) {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        saveProfile(current.copy(languageCode = languageCode))
+    }
+
+    suspend fun setHasRemovedAds(removed: Boolean) {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        saveProfile(current.copy(hasRemovedAds = removed))
+    }
+
+    suspend fun markNotificationPermissionAsked() {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        saveProfile(current.copy(hasAskedNotificationPermission = true))
+    }
+
+    // --- Authentication & Multi-Provider Login ---
+
+    suspend fun loginWithGoogle(email: String, displayName: String, photoUrl: String? = null) {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val name = displayName.ifBlank { email.substringBefore("@") }
+        val updated = current.copy(
+            isLoggedIn = true,
+            authProvider = "GOOGLE",
+            username = name,
+            email = email,
+            avatarUrl = photoUrl,
+            lastCloudSyncTime = System.currentTimeMillis()
+        )
+        saveProfile(updated)
+        try {
+            com.example.auth.CloudSyncManager.fetchFromCloud(this)
+        } catch (e: Exception) {}
+    }
+
+    suspend fun loginWithEmail(email: String, displayName: String? = null) {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val name = displayName?.takeIf { it.isNotBlank() } ?: email.substringBefore("@")
+        val updated = current.copy(
+            isLoggedIn = true,
+            authProvider = "EMAIL",
+            username = name,
+            email = email,
+            lastCloudSyncTime = System.currentTimeMillis()
+        )
+        saveProfile(updated)
+    }
+
+    suspend fun loginWithPhone(phoneNumber: String) {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val maskedPhone = if (phoneNumber.length > 4) "User ***" + phoneNumber.takeLast(4) else "Player"
+        val updated = current.copy(
+            isLoggedIn = true,
+            authProvider = "PHONE",
+            username = maskedPhone,
+            email = "$phoneNumber@phone.login",
+            lastCloudSyncTime = System.currentTimeMillis()
+        )
+        saveProfile(updated)
+    }
+
+    suspend fun loginWithSocial(provider: String, displayName: String) {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val updated = current.copy(
+            isLoggedIn = true,
+            authProvider = provider,
+            username = displayName,
+            lastCloudSyncTime = System.currentTimeMillis()
+        )
+        saveProfile(updated)
+    }
+
+    suspend fun logout() {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val updated = current.copy(
+            isLoggedIn = false,
+            authProvider = "GUEST",
+            username = "Player",
+            email = null,
+            avatarUrl = null
+        )
+        saveProfile(updated)
+    }
+
+    suspend fun deleteAccount() {
+        val fresh = UserProfile(id = 1, username = "Player")
+        saveProfile(fresh)
+    }
+
+    // --- Payment & Alternative Checkout Recording ---
+
+    suspend fun recordPurchase(method: String, paypalEmail: String? = null) {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val updated = current.copy(
+            lastPaymentMethod = method,
+            paypalEmail = paypalEmail ?: current.paypalEmail,
+            totalPurchasesCount = current.totalPurchasesCount + 1
+        )
+        saveProfile(updated)
+    }
+
+    // --- Anti-Cheat & Security Controls ---
+
+    suspend fun clearSecurityAlert() {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val updated = current.copy(
+            isCheatingDetected = false,
+            lastSecurityScanTime = System.currentTimeMillis()
+        )
+        saveProfile(updated)
+    }
+
+    // --- Developer & QA Sandbox Helpers ---
+
+    suspend fun unlockLevels(upToLevel: Int) {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val target = upToLevel.coerceIn(1, 1000)
+        val updated = current.copy(highestUnlockedLevel = target)
+        saveProfile(updated)
+    }
+
+    suspend fun grantAllBoosters(count: Int = 5) {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val updated = current.copy(
+            hammerCount = current.hammerCount + count,
+            shuffleCount = current.shuffleCount + count,
+            colorBlastCount = current.colorBlastCount + count,
+            extraMovesCount = current.extraMovesCount + count,
+            magicWandCount = current.magicWandCount + count,
+            cosmicBlastCount = current.cosmicBlastCount + count
+        )
+        saveProfile(updated)
+    }
+
+    suspend fun grantInfiniteLives(hours: Int = 2) {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val currentExpiry = maxOf(current.infiniteLivesExpiryTimestamp, System.currentTimeMillis())
+        val updated = current.copy(
+            infiniteLivesExpiryTimestamp = currentExpiry + (hours * 3600 * 1000L),
+            lives = 5
+        )
+        saveProfile(updated)
     }
 }
