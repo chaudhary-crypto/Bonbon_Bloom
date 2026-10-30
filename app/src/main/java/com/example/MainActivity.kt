@@ -38,6 +38,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // STEP 1: Configure Firebase App Check with launch intent before any UI or Firebase operations
+        com.example.auth.configureAppCheck(this, intent)
+
         enableEdgeToEdge()
 
         // Google UMP Consent flow for GDPR/EEA before loading ads

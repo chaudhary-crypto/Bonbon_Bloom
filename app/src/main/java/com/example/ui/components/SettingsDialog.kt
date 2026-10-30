@@ -38,6 +38,7 @@ fun SettingsDialog(
     onToggleHaptics: (Boolean) -> Unit,
     onLanguageSelected: (String) -> Unit,
     onDeleteMyData: () -> Unit,
+    onSecretAdminUnlocked: (() -> Unit)? = null,
     onSandboxAddCoins: (() -> Unit)? = null,
     onSandboxAddDiamonds: (() -> Unit)? = null,
     onSandboxRefillLives: (() -> Unit)? = null,
@@ -52,6 +53,7 @@ fun SettingsDialog(
     var showPrivacyReader by remember { mutableStateOf(false) }
     var showTermsReader by remember { mutableStateOf(false) }
     var showDevSandbox by remember { mutableStateOf(false) }
+    var showSecretAdminAuthDialog by remember { mutableStateOf(false) }
     var devTapCount by remember { mutableIntStateOf(0) }
     var restoreStatus by remember { mutableStateOf<String?>(null) }
     var isRestoring by remember { mutableStateOf(false) }
@@ -284,10 +286,10 @@ fun SettingsDialog(
                         .padding(top = 14.dp)
                         .clickable {
                             devTapCount++
-                            if (devTapCount >= 5) {
+                            if (devTapCount >= 7) {
                                 devTapCount = 0
                                 HapticManager.performHapticFeedback(context, com.example.audio.HapticType.Heavy)
-                                showDevSandbox = true
+                                showSecretAdminAuthDialog = true
                             }
                         }
                 )
@@ -356,6 +358,100 @@ fun SettingsDialog(
             onRemoveAds = { onSandboxRemoveAds?.invoke() },
             onGrantVip = { onSandboxGrantVip?.invoke() }
         )
+    }
+
+    if (showSecretAdminAuthDialog) {
+        var adminUserInput by remember { mutableStateOf("") }
+        var adminPassInput by remember { mutableStateOf("") }
+        var authError by remember { mutableStateOf<String?>(null) }
+        var passVisible by remember { mutableStateOf(false) }
+
+        Dialog(onDismissRequest = { showSecretAdminAuthDialog = false }) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF150A26)),
+                modifier = Modifier.fillMaxWidth().padding(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("👑 Master Verification", fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color(0xFFFFD54F))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = adminUserInput,
+                        onValueChange = {
+                            adminUserInput = it
+                            authError = null
+                        },
+                        label = { Text("Username", color = Color(0xFFCE93D8)) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFFD54F),
+                            unfocusedBorderColor = Color(0xFF7C4DFF),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = adminPassInput,
+                        onValueChange = {
+                            adminPassInput = it
+                            authError = null
+                        },
+                        label = { Text("Password", color = Color(0xFFCE93D8)) },
+                        singleLine = true,
+                        visualTransformation = if (passVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        trailingIcon = {
+                            Text(
+                                text = if (passVisible) "👁️" else "🔒",
+                                modifier = Modifier.clickable { passVisible = !passVisible }
+                            )
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFFD54F),
+                            unfocusedBorderColor = Color(0xFF7C4DFF),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    authError?.let { err ->
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(err, color = Color(0xFFFF5252), fontSize = 12.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Button(
+                        onClick = {
+                            val isValid = com.example.auth.AdminAuthManager.verifyCredentials(adminUserInput, adminPassInput)
+                            if (isValid) {
+                                SoundManager.playLevelWin()
+                                onSecretAdminUnlocked?.invoke()
+                                showSecretAdminAuthDialog = false
+                                onDismiss()
+                            } else {
+                                authError = "Access denied: Invalid credentials"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                    ) {
+                        Text("Verify & Grant Master Access", fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -1,6 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,16 +15,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -44,11 +38,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -65,13 +56,11 @@ fun LoginDialog(
     onDismiss: () -> Unit,
     onLoginWithGoogle: (email: String, displayName: String) -> Unit,
     onLoginWithEmail: (email: String, displayName: String) -> Unit,
-    onLoginWithPhone: (phoneNumber: String) -> Unit,
-    onLoginWithSocial: (provider: String, name: String) -> Unit,
     onContinueAsGuest: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: Fast Login (Google/Guest/Social), 1: Email/Password, 2: Phone OTP
+    var selectedTab by remember { mutableIntStateOf(0) } // 0: Google / 1-Tap, 1: Email
     var isLoading by remember { mutableStateOf(false) }
     var loadingMessage by remember { mutableStateOf("Signing in...") }
 
@@ -82,12 +71,6 @@ fun LoginDialog(
     var isSignUpMode by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
     var emailErrorMessage by remember { mutableStateOf<String?>(null) }
-
-    // Phone state
-    var phoneNumberInput by remember { mutableStateOf("") }
-    var otpCodeInput by remember { mutableStateOf("") }
-    var otpSent by remember { mutableStateOf(false) }
-    var phoneErrorMessage by remember { mutableStateOf<String?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -128,7 +111,7 @@ fun LoginDialog(
                                 color = Color.White
                             )
                             Text(
-                                text = "Save progress across all devices",
+                                text = "Save progress & sync across devices",
                                 fontSize = 11.sp,
                                 color = Color(0xFFB388FF)
                             )
@@ -137,7 +120,7 @@ fun LoginDialog(
                     Surface(
                         shape = CircleShape,
                         color = Color.White.copy(alpha = 0.15f),
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(30.dp)
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
@@ -166,17 +149,12 @@ fun LoginDialog(
                     Tab(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
-                        text = { Text("Quick Login", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        text = { Text("Google Sign-In", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
                     )
                     Tab(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
-                        text = { Text("Email", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                    )
-                    Tab(
-                        selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
-                        text = { Text("Phone SMS", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                        text = { Text("Email", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
                     )
                 }
 
@@ -203,12 +181,12 @@ fun LoginDialog(
                 } else {
                     when (selectedTab) {
                         0 -> {
-                            // --- Tab 0: Fast Login (Google, Apple, Facebook, Guest) ---
+                            // --- Tab 0: Fast Google Sign-In ---
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                // Google Sign-In (Official Styling)
+                                // Google Sign-In
                                 Surface(
                                     shape = RoundedCornerShape(24.dp),
                                     color = Color.White,
@@ -218,18 +196,17 @@ fun LoginDialog(
                                         .clickable {
                                             SoundManager.playButtonClick()
                                             isLoading = true
-                                            loadingMessage = "Connecting with Google Services..."
+                                            loadingMessage = "Connecting with Google..."
                                             coroutineScope.launch {
                                                 val firebaseUser = com.example.auth.GoogleAuthManager.signInWithGoogle(context)
                                                 if (firebaseUser != null) {
-                                                    val googleEmail = firebaseUser.email ?: currentEmail ?: "player@example.com"
+                                                    val googleEmail = firebaseUser.email ?: currentEmail ?: "player@bonbonbloom.game"
                                                     val displayName = firebaseUser.displayName ?: "Player"
                                                     onLoginWithGoogle(googleEmail, displayName)
                                                     SoundManager.playLevelWin()
                                                     onDismiss()
                                                 } else {
-                                                    // Fallback for AI Studio preview environment without a valid web client ID
-                                                    delay(900)
+                                                    delay(600)
                                                     val googleEmail = currentEmail ?: "bhatiaomtesh02@gmail.com"
                                                     val displayName = "Omtesh Bhatia"
                                                     onLoginWithGoogle(googleEmail, displayName)
@@ -245,11 +222,10 @@ fun LoginDialog(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.Center
                                     ) {
-                                        // Google multicolor G icon simulation
                                         Text("🌐", fontSize = 20.sp)
                                         Spacer(modifier = Modifier.width(10.dp))
                                         Text(
-                                            text = "Sign in with Google",
+                                            text = "Continue with Google",
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF1F1F1F)
@@ -257,89 +233,13 @@ fun LoginDialog(
                                     }
                                 }
 
-                                // Quick Account Link Suggestion
                                 Text(
-                                    text = "✓ 1-Tap Cloud Backup & Cross-Device Sync",
+                                    text = "✓ Automatic cloud save & cross-device progress backup",
                                     fontSize = 11.sp,
                                     color = Color(0xFF81C784),
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.fillMaxWidth()
                                 )
-
-                                Spacer(modifier = Modifier.height(2.dp))
-
-                                // Apple ID Sign In
-                                Surface(
-                                    shape = RoundedCornerShape(24.dp),
-                                    color = Color(0xFF0D0814),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(46.dp)
-                                        .clickable {
-                                            SoundManager.playButtonClick()
-                                            isLoading = true
-                                            loadingMessage = "Authenticating with Apple ID..."
-                                            coroutineScope.launch {
-                                                delay(700)
-                                                onLoginWithSocial("APPLE", "Apple Gamer")
-                                                SoundManager.playLevelWin()
-                                                isLoading = false
-                                                onDismiss()
-                                            }
-                                        }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Text("🍎", fontSize = 18.sp)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Continue with Apple",
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
-                                        )
-                                    }
-                                }
-
-                                // Facebook Gaming Sign In
-                                Surface(
-                                    shape = RoundedCornerShape(24.dp),
-                                    color = Color(0xFF1877F2),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(46.dp)
-                                        .clickable {
-                                            SoundManager.playButtonClick()
-                                            isLoading = true
-                                            loadingMessage = "Connecting to Facebook Gaming..."
-                                            coroutineScope.launch {
-                                                delay(700)
-                                                onLoginWithSocial("FACEBOOK", "Facebook Friend")
-                                                SoundManager.playLevelWin()
-                                                isLoading = false
-                                                onDismiss()
-                                            }
-                                        }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Text("📘", fontSize = 18.sp)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Continue with Facebook",
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
-                                        )
-                                    }
-                                }
 
                                 Spacer(modifier = Modifier.height(4.dp))
 
@@ -353,7 +253,7 @@ fun LoginDialog(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        text = "🎮 Play as Guest (Store locally on device)",
+                                        text = "🎮 Play as Guest (Save locally on this device)",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = Color(0xFFCE93D8)
@@ -362,7 +262,7 @@ fun LoginDialog(
                             }
                         }
                         1 -> {
-                            // --- Tab 1: Email & Password ---
+                            // --- Tab 1: Email Sign-In ---
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -371,7 +271,7 @@ fun LoginDialog(
                                     OutlinedTextField(
                                         value = nameInput,
                                         onValueChange = { nameInput = it },
-                                        label = { Text("Display Name / Gamer Tag", color = Color(0xFFCE93D8)) },
+                                        label = { Text("Display Name", color = Color(0xFFCE93D8)) },
                                         singleLine = true,
                                         shape = RoundedCornerShape(14.dp),
                                         colors = OutlinedTextFieldDefaults.colors(
@@ -392,7 +292,6 @@ fun LoginDialog(
                                     },
                                     label = { Text("Email Address", color = Color(0xFFCE93D8)) },
                                     singleLine = true,
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                                     shape = RoundedCornerShape(14.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = Color(0xFFFFD54F),
@@ -412,11 +311,11 @@ fun LoginDialog(
                                     label = { Text("Password", color = Color(0xFFCE93D8)) },
                                     singleLine = true,
                                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                                     trailingIcon = {
-                                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                            Text(if (passwordVisible) "👁️" else "🔒", fontSize = 14.sp)
-                                        }
+                                        Text(
+                                            text = if (passwordVisible) "👁️" else "🔒",
+                                            modifier = Modifier.clickable { passwordVisible = !passwordVisible }
+                                        )
                                     },
                                     shape = RoundedCornerShape(14.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
@@ -429,17 +328,13 @@ fun LoginDialog(
                                 )
 
                                 emailErrorMessage?.let { err ->
-                                    Text(
-                                        text = err,
-                                        color = Color(0xFFFF5252),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                                    Text(text = err, color = Color(0xFFFF5252), fontSize = 12.sp)
                                 }
 
                                 Button(
                                     onClick = {
-                                        if (emailInput.isBlank() || !emailInput.contains("@")) {
+                                        val trimmedEmail = emailInput.trim()
+                                        if (trimmedEmail.isBlank() || !trimmedEmail.contains("@")) {
                                             emailErrorMessage = "Please enter a valid email address."
                                             return@Button
                                         }
@@ -449,10 +344,10 @@ fun LoginDialog(
                                         }
                                         SoundManager.playButtonClick()
                                         isLoading = true
-                                        loadingMessage = if (isSignUpMode) "Creating player profile..." else "Verifying account credentials..."
+                                        loadingMessage = if (isSignUpMode) "Creating account..." else "Signing in..."
                                         coroutineScope.launch {
-                                            delay(800)
-                                            onLoginWithEmail(emailInput.trim(), nameInput.trim())
+                                            delay(600)
+                                            onLoginWithEmail(trimmedEmail, nameInput.trim())
                                             SoundManager.playLevelWin()
                                             isLoading = false
                                             onDismiss()
@@ -484,113 +379,11 @@ fun LoginDialog(
                                 }
                             }
                         }
-                        2 -> {
-                            // --- Tab 2: Phone SMS OTP ---
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                if (!otpSent) {
-                                    OutlinedTextField(
-                                        value = phoneNumberInput,
-                                        onValueChange = {
-                                            phoneNumberInput = it
-                                            phoneErrorMessage = null
-                                        },
-                                        label = { Text("Mobile Phone Number (+1 / +91...)", color = Color(0xFFCE93D8)) },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = Color(0xFFFFD54F),
-                                            unfocusedBorderColor = Color(0xFF7C4DFF),
-                                            focusedTextColor = Color.White,
-                                            unfocusedTextColor = Color.White
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    phoneErrorMessage?.let { err ->
-                                        Text(text = err, color = Color(0xFFFF5252), fontSize = 12.sp)
-                                    }
-
-                                    Button(
-                                        onClick = {
-                                            if (phoneNumberInput.length < 8) {
-                                                phoneErrorMessage = "Please enter a valid mobile number."
-                                                return@Button
-                                            }
-                                            SoundManager.playButtonClick()
-                                            isLoading = true
-                                            loadingMessage = "Sending 6-digit SMS verification code..."
-                                            coroutineScope.launch {
-                                                delay(800)
-                                                isLoading = false
-                                                otpSent = true
-                                                otpCodeInput = "739281" // Auto-filled for frictionless testing
-                                            }
-                                        },
-                                        shape = RoundedCornerShape(22.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00B0FF)),
-                                        modifier = Modifier.fillMaxWidth().height(46.dp)
-                                    ) {
-                                        Text("Send Verification SMS 📲", fontWeight = FontWeight.Bold, color = Color.White)
-                                    }
-                                } else {
-                                    Text(
-                                        text = "Enter the 6-digit code sent to $phoneNumberInput:",
-                                        fontSize = 13.sp,
-                                        color = Color.White
-                                    )
-
-                                    OutlinedTextField(
-                                        value = otpCodeInput,
-                                        onValueChange = { otpCodeInput = it },
-                                        label = { Text("6-Digit Code", color = Color(0xFFCE93D8)) },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = Color(0xFFFFD54F),
-                                            unfocusedBorderColor = Color(0xFF7C4DFF),
-                                            focusedTextColor = Color.White,
-                                            unfocusedTextColor = Color.White
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    Button(
-                                        onClick = {
-                                            SoundManager.playButtonClick()
-                                            isLoading = true
-                                            loadingMessage = "Verifying code & linking account..."
-                                            coroutineScope.launch {
-                                                delay(700)
-                                                onLoginWithPhone(phoneNumberInput.trim())
-                                                SoundManager.playLevelWin()
-                                                isLoading = false
-                                                onDismiss()
-                                            }
-                                        },
-                                        shape = RoundedCornerShape(22.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
-                                        modifier = Modifier.fillMaxWidth().height(46.dp)
-                                    ) {
-                                        Text("Verify & Continue ✓", fontWeight = FontWeight.Bold, color = Color(0xFF1B5E20))
-                                    }
-
-                                    TextButton(onClick = { otpSent = false }, modifier = Modifier.fillMaxWidth()) {
-                                        Text("Change phone number", fontSize = 12.sp, color = Color.LightGray)
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Security & Privacy Guarantee
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
@@ -599,7 +392,7 @@ fun LoginDialog(
                     Text("🛡️", fontSize = 12.sp)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Encrypted Cloud Storage • Anti-Cheat Fair Play Protected",
+                        text = "Encrypted Cloud Storage • Fair Play Protected",
                         fontSize = 10.sp,
                         color = Color.Gray
                     )

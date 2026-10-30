@@ -23,6 +23,20 @@
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-3940256099942544~3347511713"/>
 
+        <!-- Optimize initialization to prevent blocking or service binding issues on emulators -->
+        <meta-data
+            android:name="com.google.android.gms.ads.flag.OPTIMIZE_INITIALIZATION"
+            android:value="true"/>
+        <meta-data
+            android:name="com.google.android.gms.ads.flag.OPTIMIZE_AD_LOADING"
+            android:value="true"/>
+
+        <!-- AdServices configuration to resolve onNullBinding on emulators -->
+        <property
+            android:name="android.adservices.AD_SERVICES_CONFIG"
+            android:resource="@xml/gma_ad_services_config"
+            tools:replace="android:resource" />
+
         <!-- Disable Firebase Analytics automatic measurement to prevent Missing google_app_id error -->
         <meta-data
             android:name="firebase_analytics_collection_deactivated"

@@ -68,6 +68,7 @@ import com.example.game.Candy
 import com.example.game.CandyType
 import com.example.game.SpecialType
 import com.example.ui.components.AccountProfileDialog
+import com.example.ui.components.AdminConsoleDialog
 import com.example.ui.components.CandyView
 import com.example.ui.components.LoginDialog
 import com.example.ui.components.LuckyWheelDialog
@@ -90,6 +91,7 @@ fun HomeScreen(
     var showLoginDialog by remember { mutableStateOf(false) }
     var showAccountDialog by remember { mutableStateOf(false) }
     var showSecurityDialog by remember { mutableStateOf(false) }
+    var showAdminConsoleDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showNotificationRationaleDialog by remember { mutableStateOf(false) }
     var shopInitialTab by remember { mutableStateOf(0) }
@@ -202,31 +204,29 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Anti-Cheat Shield Pill
-                    Surface(
-                        shape = RoundedCornerShape(18.dp),
-                        color = if (profile.isCheatingDetected) Color(0xFFD32F2F) else Color(0xFF00E676).copy(alpha = 0.25f),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            if (profile.isCheatingDetected) Color(0xFFFF5252) else Color(0xFF00E676)
-                        ),
-                        modifier = Modifier.clickable {
-                            SoundManager.playButtonClick()
-                            showSecurityDialog = true
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    // Admin Crown Badge (Visible when logged in as Administrator)
+                    if (profile.isAdmin) {
+                        Surface(
+                            shape = RoundedCornerShape(18.dp),
+                            color = Color(0xFFFFD700),
+                            modifier = Modifier.clickable {
+                                SoundManager.playButtonClick()
+                                showAdminConsoleDialog = true
+                            }
                         ) {
-                            Text("🛡️", fontSize = 13.sp)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (profile.isCheatingDetected) "Alert!" else "Anti-Hack",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (profile.isCheatingDetected) Color.White else Color(0xFFE8F5E9)
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("👑", fontSize = 13.sp)
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "ADMIN",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color(0xFF3E2723)
+                                )
+                            }
                         }
                     }
 
@@ -260,35 +260,6 @@ fun HomeScreen(
                         }) {
                             Text("⚙️", fontSize = 13.sp)
                         }
-                    }
-                }
-            }
-
-            // Anti-Cheat Active Warning Banner (if tampered)
-            if (profile.isCheatingDetected) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFFB71C1C),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp)
-                        .clickable {
-                            SoundManager.playButtonClick()
-                            showSecurityDialog = true
-                        }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("⚠️", fontSize = 14.sp)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Anti-Cheat Guard: Data integrity alert. Tap to inspect shield & verify fair play.",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
                     }
                 }
             }
@@ -767,7 +738,7 @@ fun HomeScreen(
             )
         }
 
-        // Multi-Provider Login Dialog (Google, Email, Phone, Social, Guest)
+        // Clean Login Dialog (Google, Email, Guest)
         if (showLoginDialog) {
             LoginDialog(
                 currentEmail = profile.email,
@@ -777,12 +748,6 @@ fun HomeScreen(
                 },
                 onLoginWithEmail = { email, name ->
                     viewModel.loginWithEmail(email, name)
-                },
-                onLoginWithPhone = { phone ->
-                    viewModel.loginWithPhone(phone)
-                },
-                onLoginWithSocial = { provider, name ->
-                    viewModel.loginWithSocial(provider, name)
                 },
                 onContinueAsGuest = {
                     showLoginDialog = false
@@ -834,6 +799,7 @@ fun HomeScreen(
                 onToggleHaptics = { viewModel.toggleHaptics(it) },
                 onLanguageSelected = { viewModel.setLanguage(it) },
                 onDeleteMyData = { viewModel.deleteAccount() },
+                onSecretAdminUnlocked = { viewModel.loginAsAdmin() },
                 onSandboxAddCoins = { viewModel.addCoins(5000) },
                 onSandboxAddDiamonds = { viewModel.addDiamonds(200) },
                 onSandboxRefillLives = { viewModel.refillLivesFree() },
@@ -884,6 +850,25 @@ fun HomeScreen(
                     ) {
                         Text("Not Now", color = Color.Gray)
                     }
+                }
+            )
+        }
+
+        // Master Administrator Console Dialog
+        if (showAdminConsoleDialog) {
+            AdminConsoleDialog(
+                profile = profile,
+                onDismiss = { showAdminConsoleDialog = false },
+                onSetLevel = { lvl -> viewModel.unlockLevels(lvl) },
+                onAddCoins = { amt -> viewModel.addCoins(amt) },
+                onAddDiamonds = { amt -> viewModel.addDiamonds(amt) },
+                onGrantAllBoosters = { count -> viewModel.grantAllBoosters(count) },
+                onToggleInfiniteLives = { viewModel.grantInfiniteLives(24) },
+                onClearSecurityAlert = { viewModel.clearSecurityAlert() },
+                onSyncCloud = { /* automatically synced via repository */ },
+                onLogoutAdmin = {
+                    viewModel.logout()
+                    showAdminConsoleDialog = false
                 }
             )
         }

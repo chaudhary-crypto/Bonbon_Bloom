@@ -429,6 +429,12 @@ class UserRepository(private val userDao: UserDao) {
         saveProfile(updated)
     }
 
+    suspend fun loginAsAdmin() {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        val adminProfile = com.example.auth.AdminAuthManager.buildAdminProfile(current)
+        saveProfile(adminProfile)
+    }
+
     suspend fun loginWithPhone(phoneNumber: String) {
         val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
         val maskedPhone = if (phoneNumber.length > 4) "User ***" + phoneNumber.takeLast(4) else "Player"

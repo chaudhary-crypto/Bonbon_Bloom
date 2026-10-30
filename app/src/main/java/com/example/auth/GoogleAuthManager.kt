@@ -6,7 +6,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.example.R
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -17,7 +17,7 @@ import java.util.UUID
 
 object GoogleAuthManager {
     private const val TAG = "GoogleAuthManager"
-    
+
     // Generates a hashed nonce for security during Google Sign In
     private fun generateHashedNonce(): Pair<String, String> {
         val rawNonce = UUID.randomUUID().toString()
@@ -31,9 +31,15 @@ object GoogleAuthManager {
     suspend fun signInWithGoogle(context: Context): FirebaseUser? {
         val auth = FirebaseAuth.getInstance()
         val credentialManager = CredentialManager.create(context)
-        
-        // This web client ID is pulled from strings.xml or google-services.json
-        val webClientId = context.getString(R.string.default_web_client_id)
+
+        // Web client ID pulled from strings.xml or google-services.json
+        val webClientId = try {
+            val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+            if (resId != 0) context.getString(resId) else "6041659106-0g9ueo8m2auke1vege4pdnlfenupbb53.apps.googleusercontent.com"
+        } catch (e: Exception) {
+            "6041659106-0g9ueo8m2auke1vege4pdnlfenupbb53.apps.googleusercontent.com"
+        }
+
         if (webClientId.isEmpty() || webClientId == "YOUR_WEB_CLIENT_ID") {
             Log.e(TAG, "Missing valid default_web_client_id. Please configure Firebase.")
             return null
@@ -41,14 +47,12 @@ object GoogleAuthManager {
 
         val (rawNonce, hashedNonce) = generateHashedNonce()
 
-        val googleIdOption = GetGoogleIdOption.Builder()
-            .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(webClientId)
+        val signInWithGoogleOption = GetSignInWithGoogleOption.Builder(webClientId)
             .setNonce(hashedNonce)
             .build()
 
         val request = GetCredentialRequest.Builder()
-            .addCredentialOption(googleIdOption)
+            .addCredentialOption(signInWithGoogleOption)
             .build()
 
         try {
@@ -59,12 +63,11 @@ object GoogleAuthManager {
 
             val credential = result.credential
             if (credential is GoogleIdTokenCredential) {
-                // Pass both the ID Token and the RAW nonce to Firebase
-                val firebaseCredential = GoogleAuthProvider.getCredential(credential.idToken, null)
+                val firebaseCredential = GoogleAuthProvider.getCredential(credential.idToken, rawNonce)
                 val authResult = auth.signInWithCredential(firebaseCredential).await()
                 return authResult.user
             } else {
-                Log.e(TAG, "Unexpected type of credential")
+                Log.e(TAG, "Unexpected type of credential: ${credential.type}")
                 return null
             }
         } catch (e: GetCredentialCancellationException) {
@@ -75,8 +78,9 @@ object GoogleAuthManager {
             return null
         }
     }
-    
+
     fun signOut() {
         FirebaseAuth.getInstance().signOut()
     }
 }
+

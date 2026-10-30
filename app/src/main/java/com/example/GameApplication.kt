@@ -29,8 +29,13 @@ class GameApplication : Application() {
             } catch (_: Throwable) {}
         }
 
-        // Initialize Google Mobile Ads SDK safely on main thread
+        // Initialize Google Mobile Ads SDK safely
         try {
+            val requestConfig = com.google.android.gms.ads.MobileAds.getRequestConfiguration().toBuilder()
+                .setTagForChildDirectedTreatment(com.google.android.gms.ads.RequestConfiguration.TAG_FOR_CHILD_DIRECTED_TREATMENT_FALSE)
+                .build()
+            com.google.android.gms.ads.MobileAds.setRequestConfiguration(requestConfig)
+
             MobileAds.initialize(this) {
                 try {
                     com.example.ads.AdManager.preloadAds(this)
@@ -54,7 +59,7 @@ class GameApplication : Application() {
                 AppDatabase::class.java,
                 "crush_candy_db"
             )
-            .addMigrations(AppDatabase.MIGRATION_5_6)
+            .addMigrations(AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7)
             .build()
         } catch (e: Throwable) {
             Log.e("GameApplication", "Disk database failed, falling back to memory database: ${e.message}")

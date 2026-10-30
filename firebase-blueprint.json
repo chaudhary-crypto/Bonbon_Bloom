@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "UserProfile": {
+      "collection": "users",
+      "fields": {
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "authProvider": { "type": "string" },
+        "highestUnlockedLevel": { "type": "integer" },
+        "totalStars": { "type": "integer" },
+        "coins": { "type": "integer" },
+        "diamonds": { "type": "integer" },
+        "lives": { "type": "integer" },
+        "isVipSubscribed": { "type": "boolean" },
+        "vipExpiryTimestamp": { "type": "integer" },
+        "infiniteLivesExpiryTimestamp": { "type": "integer" },
+        "hammerCount": { "type": "integer" },
+        "shuffleCount": { "type": "integer" },
+        "colorBlastCount": { "type": "integer" },
+        "extraMovesCount": { "type": "integer" },
+        "magicWandCount": { "type": "integer" },
+        "cosmicBlastCount": { "type": "integer" },
+        "hasRemovedAds": { "type": "boolean" },
+        "lastCloudSyncTime": { "type": "integer" }
+      }
+    }
+  }
+}

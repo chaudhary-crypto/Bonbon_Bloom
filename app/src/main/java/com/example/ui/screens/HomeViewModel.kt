@@ -168,6 +168,12 @@ class HomeViewModel(private val repository: UserRepository) : ViewModel() {
         }
     }
 
+    fun loginAsAdmin() {
+        viewModelScope.launch {
+            repository.loginAsAdmin()
+        }
+    }
+
     fun loginWithPhone(phoneNumber: String) {
         viewModelScope.launch {
             repository.loginWithPhone(phoneNumber)

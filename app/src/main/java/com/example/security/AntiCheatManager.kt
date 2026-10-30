@@ -79,6 +79,19 @@ object AntiCheatManager {
     }
 
     /**
+     * Sanitizes a tampered profile by quarantining only suspicious currency while preserving level progress.
+     */
+    fun sanitizeProfile(profile: UserProfile): UserProfile {
+        val sanitized = profile.copy(
+            coins = 0,
+            diamonds = 0,
+            isCheatingDetected = true,
+            cheatAttemptsCount = profile.cheatAttemptsCount + 1
+        )
+        return signProfile(sanitized)
+    }
+
+    /**
      * Checks if the device environment exhibits indicators of rooting or jailbreak.
      */
     fun checkRoot(): Boolean {
@@ -177,15 +190,6 @@ object AntiCheatManager {
      * Validates candy swap actions to prevent impossible speedhacks and teleport hacks.
      */
     fun validateMove(pos1: GridPosition, pos2: GridPosition): MoveValidationResult {
-        val now = System.currentTimeMillis()
-        val elapsed = now - lastMoveTimestamp
-
-        // Rate limit check
-        if (lastMoveTimestamp > 0 && elapsed < MIN_MOVE_INTERVAL_MS) {
-            return MoveValidationResult.RateLimitExceeded
-        }
-        lastMoveTimestamp = now
-
         // Adjacency check
         val isAdjacent = (abs(pos1.row - pos2.row) == 1 && pos1.col == pos2.col) ||
                          (abs(pos1.col - pos2.col) == 1 && pos1.row == pos2.row)

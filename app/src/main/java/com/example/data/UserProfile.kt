@@ -51,7 +51,8 @@ data class UserProfile(
     val hasRemovedAds: Boolean = false,
     val hapticsEnabled: Boolean = true,
     val languageCode: String = "en",
-    val hasAskedNotificationPermission: Boolean = false
+    val hasAskedNotificationPermission: Boolean = false,
+    val isAdmin: Boolean = false
 ) {
     val isVipActive: Boolean
         get() = isVipSubscribed && vipExpiryTimestamp > System.currentTimeMillis()

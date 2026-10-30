@@ -414,13 +414,15 @@ class GameEngine {
 
     fun swapCandies(pos1: GridPosition, pos2: GridPosition) {
         if (_gameState.value != GameState.Idle) return
-        if (_movesLeft.value <= 0) return
-
-        // Anti-Cheat: Validate move speed and coordinate adjacency to prevent teleport or macro hacks
-        val validation = AntiCheatManager.validateMove(pos1, pos2)
-        if (validation != MoveValidationResult.Valid) {
+        if (_movesLeft.value <= 0) {
+            checkGameOutcome()
             return
         }
+
+        // Coordinate adjacency check
+        val isAdjacent = (abs(pos1.row - pos2.row) == 1 && pos1.col == pos2.col) ||
+                         (abs(pos1.col - pos2.col) == 1 && pos1.row == pos2.row)
+        if (!isAdjacent) return
 
         try {
             val b = _board.value.map { it.toMutableList() }.toMutableList()
@@ -472,12 +474,12 @@ class GameEngine {
                     throw e
                 } catch (e: Exception) {
                     android.util.Log.e("GameEngine", "Error during swap", e)
-                    _gameState.value = GameState.Idle
+                    checkGameOutcome()
                 }
             }
         } catch (e: Exception) {
             android.util.Log.e("GameEngine", "Error validating swap", e)
-            _gameState.value = GameState.Idle
+            checkGameOutcome()
         }
     }
 
@@ -792,16 +794,30 @@ class GameEngine {
         }
 
         // Trigger existing special candies being cleared in this match!
-        for (pos in positionsToClear) {
+        val extraPositions = mutableSetOf<GridPosition>()
+        val queue = ArrayDeque(positionsToClear)
+        val visited = mutableSetOf<GridPosition>()
+
+        while (queue.isNotEmpty()) {
+            val pos = queue.removeFirst()
+            if (!visited.add(pos)) continue
             val special = board[pos.row][pos.col].candy?.specialType
             when (special) {
                 SpecialType.RocketRow -> {
                     SoundManager.playRocketBlast()
-                    for (c in 0 until width) positionsToClear.add(GridPosition(pos.row, c))
+                    for (c in 0 until width) {
+                        val p = GridPosition(pos.row, c)
+                        extraPositions.add(p)
+                        if (!visited.contains(p)) queue.add(p)
+                    }
                 }
                 SpecialType.RocketCol -> {
                     SoundManager.playRocketBlast()
-                    for (r in 0 until height) positionsToClear.add(GridPosition(r, pos.col))
+                    for (r in 0 until height) {
+                        val p = GridPosition(r, pos.col)
+                        extraPositions.add(p)
+                        if (!visited.contains(p)) queue.add(p)
+                    }
                 }
                 SpecialType.Bomb -> {
                     SoundManager.playBombExplosion()
@@ -810,7 +826,9 @@ class GameEngine {
                             val nr = pos.row + dr
                             val nc = pos.col + dc
                             if (nr in 0 until height && nc in 0 until width) {
-                                positionsToClear.add(GridPosition(nr, nc))
+                                val p = GridPosition(nr, nc)
+                                extraPositions.add(p)
+                                if (!visited.contains(p)) queue.add(p)
                             }
                         }
                     }
@@ -818,6 +836,7 @@ class GameEngine {
                 else -> {}
             }
         }
+        positionsToClear.addAll(extraPositions)
 
         // Apply score and clear candies
         val matchScore = positionsToClear.size * 20 * comboCount
@@ -1120,17 +1139,21 @@ class GameEngine {
                     count++
                 } else {
                     if (count >= 3) {
-                        val type = board[r][c - 1].candy!!.type
-                        val set = (0 until count).map { GridPosition(r, c - 1 - it) }.toSet()
-                        horizontalMatches.add(type to set)
+                        val type = board[r][c - 1].candy?.type
+                        if (type != null && type != CandyType.RainbowBomb && type != CandyType.Empty) {
+                            val set = (0 until count).map { GridPosition(r, c - 1 - it) }.toSet()
+                            horizontalMatches.add(type to set)
+                        }
                     }
                     count = 1
                 }
             }
             if (count >= 3) {
-                val type = board[r][width - 1].candy!!.type
-                val set = (0 until count).map { GridPosition(r, width - 1 - it) }.toSet()
-                horizontalMatches.add(type to set)
+                val type = board[r][width - 1].candy?.type
+                if (type != null && type != CandyType.RainbowBomb && type != CandyType.Empty) {
+                    val set = (0 until count).map { GridPosition(r, width - 1 - it) }.toSet()
+                    horizontalMatches.add(type to set)
+                }
             }
         }
 
@@ -1144,17 +1167,21 @@ class GameEngine {
                     count++
                 } else {
                     if (count >= 3) {
-                        val type = board[r - 1][c].candy!!.type
-                        val set = (0 until count).map { GridPosition(r - 1 - it, c) }.toSet()
-                        verticalMatches.add(type to set)
+                        val type = board[r - 1][c].candy?.type
+                        if (type != null && type != CandyType.RainbowBomb && type != CandyType.Empty) {
+                            val set = (0 until count).map { GridPosition(r - 1 - it, c) }.toSet()
+                            verticalMatches.add(type to set)
+                        }
                     }
                     count = 1
                 }
             }
             if (count >= 3) {
-                val type = board[height - 1][c].candy!!.type
-                val set = (0 until count).map { GridPosition(height - 1 - it, c) }.toSet()
-                verticalMatches.add(type to set)
+                val type = board[height - 1][c].candy?.type
+                if (type != null && type != CandyType.RainbowBomb && type != CandyType.Empty) {
+                    val set = (0 until count).map { GridPosition(height - 1 - it, c) }.toSet()
+                    verticalMatches.add(type to set)
+                }
             }
         }
 

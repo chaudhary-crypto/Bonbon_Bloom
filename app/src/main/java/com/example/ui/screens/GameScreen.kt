@@ -341,6 +341,7 @@ fun GameScreen(
                 onRefillLivesFree = { viewModel.refillLivesFree() }
             )
         }
+
     }
 }
 
@@ -638,6 +639,7 @@ fun GameBoardView(
         contentAlignment = Alignment.TopStart
     ) {
         val cellSize = maxWidth / cols
+        var selectedCell by remember { mutableStateOf<GridPosition?>(null) }
 
         // Layer 1: Background Cells (Jelly, Ice, Chocolate)
         Column {
@@ -648,7 +650,11 @@ fun GameBoardView(
                         Box(
                             modifier = Modifier
                                 .size(cellSize)
-                                .clickable { onCellClick(GridPosition(r, c)) }
+                                .clickable {
+                                    if (activeBooster != BoosterType.None) {
+                                        onCellClick(GridPosition(r, c))
+                                    }
+                                }
                         ) {
                             CellBackgroundView(
                                 obstacle = cell.obstacle,
@@ -666,7 +672,9 @@ fun GameBoardView(
                 val cell = board[r][c]
                 val candy = cell.candy
                 if (candy != null) {
-                    val isHinted = hintCandies.contains(GridPosition(r, c))
+                    val pos = GridPosition(r, c)
+                    val isHinted = hintCandies.contains(pos)
+                    val isSelected = selectedCell == pos
                     key(candy.id) {
                         AnimatedCandyTile(
                             candy = candy,
@@ -676,8 +684,34 @@ fun GameBoardView(
                             cols = cols,
                             rows = rows,
                             isHinted = isHinted,
-                            onSwap = onSwap,
-                            onClick = { onCellClick(GridPosition(r, c)) }
+                            isSelected = isSelected,
+                            onSwap = { p1, p2 ->
+                                selectedCell = null
+                                onSwap(p1, p2)
+                            },
+                            onClick = {
+                                if (activeBooster != BoosterType.None) {
+                                    onCellClick(pos)
+                                } else {
+                                    val currentSelected = selectedCell
+                                    if (currentSelected == null) {
+                                        selectedCell = pos
+                                        SoundManager.playButtonClick()
+                                    } else if (currentSelected == pos) {
+                                        selectedCell = null
+                                    } else {
+                                        val isAdjacent = (abs(currentSelected.row - pos.row) == 1 && currentSelected.col == pos.col) ||
+                                                         (abs(currentSelected.col - pos.col) == 1 && currentSelected.row == pos.row)
+                                        if (isAdjacent) {
+                                            selectedCell = null
+                                            onSwap(currentSelected, pos)
+                                        } else {
+                                            selectedCell = pos
+                                            SoundManager.playButtonClick()
+                                        }
+                                    }
+                                }
+                            }
                         )
                     }
                 }
@@ -695,6 +729,7 @@ fun AnimatedCandyTile(
     cols: Int,
     rows: Int,
     isHinted: Boolean,
+    isSelected: Boolean,
     onSwap: (GridPosition, GridPosition) -> Unit,
     onClick: () -> Unit
 ) {
@@ -708,12 +743,18 @@ fun AnimatedCandyTile(
         animationSpec = tween(180, easing = FastOutSlowInEasing),
         label = "y"
     )
+    val tileScale by animateFloatAsState(
+        targetValue = if (isSelected) 1.15f else 1f,
+        animationSpec = tween(150),
+        label = "tile_scale"
+    )
 
     Box(
         modifier = Modifier
             .offset { IntOffset(animatedX.roundToPx(), animatedY.roundToPx()) }
             .size(cellSize)
-            .pointerInput(Unit) {
+            .scale(tileScale)
+            .pointerInput(candy.id, row, col) {
                 var dragX = 0f
                 var dragY = 0f
                 detectDragGestures(
@@ -722,10 +763,10 @@ fun AnimatedCandyTile(
                         dragY = 0f
                     },
                     onDragEnd = {
-                        if (abs(dragX) > abs(dragY) && abs(dragX) > 35f) {
+                        if (abs(dragX) > abs(dragY) && abs(dragX) > 20f) {
                             if (dragX > 0 && col < cols - 1) onSwap(GridPosition(row, col), GridPosition(row, col + 1))
                             else if (dragX < 0 && col > 0) onSwap(GridPosition(row, col), GridPosition(row, col - 1))
-                        } else if (abs(dragY) > abs(dragX) && abs(dragY) > 35f) {
+                        } else if (abs(dragY) > abs(dragX) && abs(dragY) > 20f) {
                             if (dragY > 0 && row < rows - 1) onSwap(GridPosition(row, col), GridPosition(row + 1, col))
                             else if (dragY < 0 && row > 0) onSwap(GridPosition(row, col), GridPosition(row - 1, col))
                         }
@@ -738,7 +779,7 @@ fun AnimatedCandyTile(
             }
             .clickable(onClick = onClick)
     ) {
-        CandyView(candy = candy, isHinted = isHinted)
+        CandyView(candy = candy, isHinted = isHinted || isSelected)
     }
 }
 

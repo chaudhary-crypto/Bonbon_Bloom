@@ -142,7 +142,10 @@ fun AccountProfileDialog(
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White
                                 )
-                                if (profile.isVipActive) {
+                                if (profile.isAdmin) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("👑 ADMIN", fontSize = 11.sp, fontWeight = FontWeight.Black, color = Color(0xFFFFD54F))
+                                } else if (profile.isVipActive) {
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text("👑 VIP", fontSize = 11.sp, fontWeight = FontWeight.Black, color = Color(0xFFFFD54F))
                                 }
