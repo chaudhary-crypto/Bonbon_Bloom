@@ -50,4 +50,4 @@ Bonbon Bloom is targeted at a general audience aged **13 and older**. We do not 
 
 ### 6. Contact Us
 For any privacy questions or data deletion assistance, please contact:
-**Support Email:** support@bonbonbloom.game
+**Support Email:** support@earnvero.app

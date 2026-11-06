@@ -14,7 +14,7 @@ data class UserProfile(
     val lastLifeUpdate: Long = System.currentTimeMillis(),
     val highestUnlockedLevel: Int = 1,
     val soundEnabled: Boolean = true,
-    val musicEnabled: Boolean = true,
+    val musicEnabled: Boolean = false,
     val hammerCount: Int = 3,
     val shuffleCount: Int = 2,
     val colorBlastCount: Int = 2,

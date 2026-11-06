@@ -1,16 +1,16 @@
 <resources>
-    <string name="app_name">बॉनबॉन ब्लूम</string>
+    <string name="app_name">Bonbon Bloom</string>
     <string name="settings_title">सेटिंग्स</string>
     <string name="sound_effects">ध्वनि प्रभाव</string>
     <string name="music">संगीत</string>
     <string name="haptics">कंपन (हैप्टिक्स)</string>
     <string name="language">भाषा</string>
-    <string name="privacy_policy_title">गोपनीयता नीति</string>
-    <string name="terms_of_service_title">सेवा की शर्तें</string>
-    <string name="restore_purchases">खरीदारी पुनर्स्थापित करें</string>
-    <string name="delete_my_data">मेरा डेटा हटाएं</string>
-    <string name="privacy_options">गोपनीयता विकल्प</string>
-    <string name="vip_subscription_terms">स्वतः नवीनीकरण सदस्यता। पुष्टि पर Google Play खाते से शुल्क लिया जाएगा। वर्तमान अवधि समाप्त होने से कम से कम 24 घंटे पहले रद्द न करने पर सदस्यता स्वतः नवीनीकृत हो जाएगी। Google Play Store > सदस्यताएं में कभी भी प्रबंधित या रद्द करें।</string>
+    <string name="bonbon_privacy_policy_title">गोपनीयता नीति</string>
+    <string name="bonbon_terms_of_service_title">सेवा की शर्तें</string>
+    <string name="bonbon_restore_purchases">खरीदारी पुनर्स्थापित करें</string>
+    <string name="bonbon_delete_my_data">मेरा डेटा हटाएं</string>
+    <string name="bonbon_privacy_options">गोपनीयता विकल्प</string>
+    <string name="bonbon_vip_subscription_terms">स्वतः नवीनीकरण सदस्यता। पुष्टि पर Google Play खाते से शुल्क लिया जाएगा। वर्तमान अवधि समाप्त होने से कम से कम 24 घंटे पहले रद्द न करने पर सदस्यता स्वतः नवीनीकृत हो जाएगी। Google Play Store > सदस्यताएं में कभी भी प्रबंधित या रद्द करें।</string>
 
     <string name="level_title">स्तर %1$d</string>
     <string name="moves_left">चालें: %1$d</string>

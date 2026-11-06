@@ -29,6 +29,7 @@ class GameViewModel(
     val particles = engine.particles
     val shakeIntensity = engine.shakeIntensity
     val hintCandies = engine.hintCandies
+    val clearingPositions = engine.clearingPositions
     val activeBooster = engine.activeBooster
 
     val userProfile = repository.userProfile.stateIn(
@@ -52,7 +53,55 @@ class GameViewModel(
         }
     }
 
+    /**
+     * Robust adjacency detection: ensures exactly Manhattan distance of 1 (horizontal or vertical)
+     */
+    fun areCandiesAdjacent(pos1: GridPosition, pos2: GridPosition): Boolean {
+        val rowDiff = kotlin.math.abs(pos1.row - pos2.row)
+        val colDiff = kotlin.math.abs(pos1.col - pos2.col)
+        return (rowDiff == 1 && colDiff == 0) || (rowDiff == 0 && colDiff == 1)
+    }
+
+    /**
+     * Detects all 3+, 4+, 5+, T-shape and L-shape match groups across the board
+     */
+    fun detectMatches(boardState: List<List<Cell>>): List<GameEngine.MatchGroup> {
+        return engine.findMatchGroups(boardState)
+    }
+
+    /**
+     * Determines whether swapping two adjacent candies will produce a valid match or combo
+     */
+    fun willSwapProduceMatch(pos1: GridPosition, pos2: GridPosition): Boolean {
+        if (!areCandiesAdjacent(pos1, pos2)) return false
+        val currentBoard = board.value
+        if (pos1.row !in currentBoard.indices || pos1.col !in currentBoard[0].indices) return false
+        if (pos2.row !in currentBoard.indices || pos2.col !in currentBoard[0].indices) return false
+
+        val c1 = currentBoard[pos1.row][pos1.col].candy ?: return false
+        val c2 = currentBoard[pos2.row][pos2.col].candy ?: return false
+
+        // Special candies always trigger actions
+        if (c1.specialType != SpecialType.None || c2.specialType != SpecialType.None ||
+            c1.type == CandyType.RainbowBomb || c2.type == CandyType.RainbowBomb) {
+            return true
+        }
+
+        // Simulate swap
+        val simulated = currentBoard.map { it.toMutableList() }
+        simulated[pos1.row][pos1.col] = simulated[pos1.row][pos1.col].copy(candy = c2)
+        simulated[pos2.row][pos2.col] = simulated[pos2.row][pos2.col].copy(candy = c1)
+
+        return detectMatches(simulated).isNotEmpty()
+    }
+
+    /**
+     * Robust swap handler: verifies adjacency, initiates removal animation for matched candies,
+     * and coordinates the cascade refilling sequence.
+     */
     fun swap(pos1: GridPosition, pos2: GridPosition) {
+        if (!areCandiesAdjacent(pos1, pos2)) return
+
         val booster = activeBooster.value
         if (booster == BoosterType.MagicSwap) {
             // Magic swap bypasses match condition!
@@ -68,6 +117,10 @@ class GameViewModel(
             return
         }
         engine.swapCandies(pos1, pos2)
+    }
+
+    fun checkGameOutcome() {
+        engine.evaluateGameOutcome()
     }
 
     fun onCellClicked(pos: GridPosition) {

@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
@@ -13,6 +14,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +33,8 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -48,8 +53,10 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
@@ -90,6 +97,10 @@ fun GameScreen(
     levelId: Int,
     onNavigateBack: () -> Unit
 ) {
+    BackHandler {
+        onNavigateBack()
+    }
+
     LaunchedEffect(levelId) {
         viewModel.startLevel(levelId)
     }
@@ -105,6 +116,7 @@ fun GameScreen(
     val particles by viewModel.particles.collectAsState()
     val shakeIntensity by viewModel.shakeIntensity.collectAsState()
     val hintCandies by viewModel.hintCandies.collectAsState()
+    val clearingPositions by viewModel.clearingPositions.collectAsState()
     val activeBooster by viewModel.activeBooster.collectAsState()
     val profile by viewModel.userProfile.collectAsState()
 
@@ -114,13 +126,23 @@ fun GameScreen(
     val context = LocalContext.current
     val activity = context as? Activity
 
-    LaunchedEffect(gameState) {
+    LaunchedEffect(gameState, movesLeft) {
         if (gameState == GameState.LevelComplete && !showWinDialogHandled) {
             viewModel.onLevelCompleted()
             showWinDialogHandled = true
         }
         if (gameState == GameState.Idle) {
             showWinDialogHandled = false
+            if (movesLeft <= 0) {
+                kotlinx.coroutines.delay(180)
+                viewModel.checkGameOutcome()
+            }
+        }
+        if (movesLeft <= 0 && gameState != GameState.LevelComplete && gameState != GameState.GameOver) {
+            kotlinx.coroutines.delay(220)
+            if (gameState != GameState.LevelComplete && gameState != GameState.GameOver) {
+                viewModel.checkGameOutcome()
+            }
         }
     }
 
@@ -203,17 +225,19 @@ fun GameScreen(
                 }
             }
 
-            // 8x8 Match-3 Game Board with Layered Rendering
+            // Match-3 Game Board with Layered Rendering & Adaptive Weight
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 6.dp),
+                    .weight(1f, fill = false)
+                    .padding(vertical = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
                 if (board.isNotEmpty()) {
                     GameBoardView(
                         board = board,
                         hintCandies = hintCandies,
+                        clearingPositions = clearingPositions,
                         activeBooster = activeBooster,
                         onSwap = { p1, p2 -> viewModel.swap(p1, p2) },
                         onCellClick = { p -> viewModel.onCellClicked(p) }
@@ -260,7 +284,8 @@ fun GameScreen(
                         }
                     }
                     activity?.let { act ->
-                        AdManager.showInterstitial(act, force = true) { proceed() }
+                        AdManager.registerLevelCompleted(act, level.id)
+                        AdManager.showInterstitial(act, currentLevelId = level.id) { proceed() }
                     } ?: proceed()
                 },
                 onDoubleCoins = { extraCoins ->
@@ -268,7 +293,7 @@ fun GameScreen(
                 },
                 onReplay = {
                     activity?.let { act ->
-                        AdManager.showInterstitial(act, force = true) { viewModel.retryLevel() }
+                        AdManager.showInterstitial(act, currentLevelId = level.id) { viewModel.retryLevel() }
                     } ?: viewModel.retryLevel()
                 },
                 onBackToMap = onNavigateBack
@@ -276,7 +301,8 @@ fun GameScreen(
         }
 
         // Out of Moves Dialog
-        if (gameState == GameState.GameOver) {
+        val isOutOfMoves = gameState == GameState.GameOver || (movesLeft <= 0 && gameState != GameState.LevelComplete && gameState != GameState.Matching && gameState != GameState.Falling && gameState != GameState.Swapping)
+        if (isOutOfMoves) {
             LevelGameOverDialog(
                 levelId = level.id,
                 profile = profile,
@@ -292,7 +318,7 @@ fun GameScreen(
                 onRetry = {
                     if (profile.lives > 0 || profile.hasInfiniteLives) {
                         activity?.let { act ->
-                            AdManager.showInterstitial(act, force = true) { viewModel.retryLevel() }
+                            AdManager.showInterstitial(act, currentLevelId = level.id) { viewModel.retryLevel() }
                         } ?: viewModel.retryLevel()
                     } else {
                         // Out of lives: offer rewarded ad to refill a heart or open shop
@@ -623,23 +649,99 @@ fun GameObjectiveShelf(
 fun GameBoardView(
     board: List<List<Cell>>,
     hintCandies: List<GridPosition>,
+    clearingPositions: Set<GridPosition>,
     activeBooster: BoosterType,
     onSwap: (GridPosition, GridPosition) -> Unit,
     onCellClick: (GridPosition) -> Unit
 ) {
     val rows = board.size
-    val cols = board[0].size
+    val cols = if (rows > 0) board[0].size else 8
+    var selectedCell by remember { mutableStateOf<GridPosition?>(null) }
 
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0x22000000))
-            .padding(6.dp),
+            .padding(6.dp)
+            .pointerInput(rows, cols, activeBooster) {
+                val cellWidthPx = size.width.toFloat() / cols
+                val cellHeightPx = size.height.toFloat() / rows
+                val minSwipeDistancePx = (cellWidthPx * 0.25f).coerceIn(16f, 40f)
+
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val startX = down.position.x
+                    val startY = down.position.y
+                    val startCol = (startX / cellWidthPx).toInt().coerceIn(0, cols - 1)
+                    val startRow = (startY / cellHeightPx).toInt().coerceIn(0, rows - 1)
+                    var hasSwapped = false
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+
+                        if (change.pressed && !hasSwapped) {
+                            val dx = change.position.x - startX
+                            val dy = change.position.y - startY
+
+                            if (abs(dx) >= minSwipeDistancePx || abs(dy) >= minSwipeDistancePx) {
+                                hasSwapped = true
+                                change.consume()
+
+                                if (activeBooster != BoosterType.None) {
+                                    onCellClick(GridPosition(startRow, startCol))
+                                } else {
+                                    val target = if (abs(dx) >= abs(dy)) {
+                                        if (dx > 0 && startCol < cols - 1) GridPosition(startRow, startCol + 1)
+                                        else if (dx < 0 && startCol > 0) GridPosition(startRow, startCol - 1)
+                                        else null
+                                    } else {
+                                        if (dy > 0 && startRow < rows - 1) GridPosition(startRow + 1, startCol)
+                                        else if (dy < 0 && startRow > 0) GridPosition(startRow - 1, startCol)
+                                        else null
+                                    }
+
+                                    if (target != null) {
+                                        selectedCell = null
+                                        onSwap(GridPosition(startRow, startCol), target)
+                                    }
+                                }
+                            }
+                        } else if (!change.pressed) {
+                            if (!hasSwapped) {
+                                change.consume()
+                                val clickedPos = GridPosition(startRow, startCol)
+                                if (activeBooster != BoosterType.None) {
+                                    onCellClick(clickedPos)
+                                } else {
+                                    val currentSelected = selectedCell
+                                    if (currentSelected == null) {
+                                        selectedCell = clickedPos
+                                        SoundManager.playButtonClick()
+                                    } else if (currentSelected == clickedPos) {
+                                        selectedCell = null
+                                    } else {
+                                        val isAdjacent = (abs(currentSelected.row - clickedPos.row) == 1 && currentSelected.col == clickedPos.col) ||
+                                                         (abs(currentSelected.col - clickedPos.col) == 1 && currentSelected.row == clickedPos.row)
+                                        if (isAdjacent) {
+                                            selectedCell = null
+                                            onSwap(currentSelected, clickedPos)
+                                        } else {
+                                            selectedCell = clickedPos
+                                            SoundManager.playButtonClick()
+                                        }
+                                    }
+                                }
+                            }
+                            break
+                        }
+                    }
+                }
+            },
         contentAlignment = Alignment.TopStart
     ) {
         val cellSize = maxWidth / cols
-        var selectedCell by remember { mutableStateOf<GridPosition?>(null) }
 
         // Layer 1: Background Cells (Jelly, Ice, Chocolate)
         Column {
@@ -647,15 +749,7 @@ fun GameBoardView(
                 Row {
                     for (c in 0 until cols) {
                         val cell = board[r][c]
-                        Box(
-                            modifier = Modifier
-                                .size(cellSize)
-                                .clickable {
-                                    if (activeBooster != BoosterType.None) {
-                                        onCellClick(GridPosition(r, c))
-                                    }
-                                }
-                        ) {
+                        Box(modifier = Modifier.size(cellSize)) {
                             CellBackgroundView(
                                 obstacle = cell.obstacle,
                                 jellyCount = cell.jellyCount
@@ -666,7 +760,7 @@ fun GameBoardView(
             }
         }
 
-        // Layer 2: Candies Floating Overlay with animation
+        // Layer 2: Candies Floating Overlay with smooth removal pop animation
         for (r in 0 until rows) {
             for (c in 0 until cols) {
                 val cell = board[r][c]
@@ -675,43 +769,16 @@ fun GameBoardView(
                     val pos = GridPosition(r, c)
                     val isHinted = hintCandies.contains(pos)
                     val isSelected = selectedCell == pos
+                    val isClearing = clearingPositions.contains(pos)
                     key(candy.id) {
                         AnimatedCandyTile(
                             candy = candy,
                             row = r,
                             col = c,
                             cellSize = cellSize,
-                            cols = cols,
-                            rows = rows,
                             isHinted = isHinted,
                             isSelected = isSelected,
-                            onSwap = { p1, p2 ->
-                                selectedCell = null
-                                onSwap(p1, p2)
-                            },
-                            onClick = {
-                                if (activeBooster != BoosterType.None) {
-                                    onCellClick(pos)
-                                } else {
-                                    val currentSelected = selectedCell
-                                    if (currentSelected == null) {
-                                        selectedCell = pos
-                                        SoundManager.playButtonClick()
-                                    } else if (currentSelected == pos) {
-                                        selectedCell = null
-                                    } else {
-                                        val isAdjacent = (abs(currentSelected.row - pos.row) == 1 && currentSelected.col == pos.col) ||
-                                                         (abs(currentSelected.col - pos.col) == 1 && currentSelected.row == pos.row)
-                                        if (isAdjacent) {
-                                            selectedCell = null
-                                            onSwap(currentSelected, pos)
-                                        } else {
-                                            selectedCell = pos
-                                            SoundManager.playButtonClick()
-                                        }
-                                    }
-                                }
-                            }
+                            isClearing = isClearing
                         )
                     }
                 }
@@ -726,27 +793,33 @@ fun AnimatedCandyTile(
     row: Int,
     col: Int,
     cellSize: Dp,
-    cols: Int,
-    rows: Int,
     isHinted: Boolean,
     isSelected: Boolean,
-    onSwap: (GridPosition, GridPosition) -> Unit,
-    onClick: () -> Unit
+    isClearing: Boolean
 ) {
     val animatedX by animateDpAsState(
         targetValue = cellSize * col,
-        animationSpec = tween(180, easing = FastOutSlowInEasing),
+        animationSpec = tween(160, easing = FastOutSlowInEasing),
         label = "x"
     )
     val animatedY by animateDpAsState(
         targetValue = cellSize * row,
-        animationSpec = tween(180, easing = FastOutSlowInEasing),
+        animationSpec = tween(160, easing = FastOutSlowInEasing),
         label = "y"
     )
     val tileScale by animateFloatAsState(
-        targetValue = if (isSelected) 1.15f else 1f,
-        animationSpec = tween(150),
+        targetValue = when {
+            isClearing -> 0.0f
+            isSelected -> 1.18f
+            else -> 1f
+        },
+        animationSpec = if (isClearing) tween(200, easing = FastOutLinearInEasing) else tween(140),
         label = "tile_scale"
+    )
+    val tileAlpha by animateFloatAsState(
+        targetValue = if (isClearing) 0.0f else 1f,
+        animationSpec = if (isClearing) tween(180) else tween(100),
+        label = "tile_alpha"
     )
 
     Box(
@@ -754,32 +827,17 @@ fun AnimatedCandyTile(
             .offset { IntOffset(animatedX.roundToPx(), animatedY.roundToPx()) }
             .size(cellSize)
             .scale(tileScale)
-            .pointerInput(candy.id, row, col) {
-                var dragX = 0f
-                var dragY = 0f
-                detectDragGestures(
-                    onDragStart = {
-                        dragX = 0f
-                        dragY = 0f
-                    },
-                    onDragEnd = {
-                        if (abs(dragX) > abs(dragY) && abs(dragX) > 20f) {
-                            if (dragX > 0 && col < cols - 1) onSwap(GridPosition(row, col), GridPosition(row, col + 1))
-                            else if (dragX < 0 && col > 0) onSwap(GridPosition(row, col), GridPosition(row, col - 1))
-                        } else if (abs(dragY) > abs(dragX) && abs(dragY) > 20f) {
-                            if (dragY > 0 && row < rows - 1) onSwap(GridPosition(row, col), GridPosition(row + 1, col))
-                            else if (dragY < 0 && row > 0) onSwap(GridPosition(row, col), GridPosition(row - 1, col))
-                        }
-                    }
-                ) { change, dragAmount ->
-                    change.consume()
-                    dragX += dragAmount.x
-                    dragY += dragAmount.y
-                }
-            }
-            .clickable(onClick = onClick)
+            .alpha(tileAlpha)
     ) {
         CandyView(candy = candy, isHinted = isHinted || isSelected)
+        if (isClearing) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.7f))
+            )
+        }
     }
 }
 
@@ -1152,14 +1210,16 @@ fun LevelGameOverDialog(
     val playerCoins = profile.coins
     val playerDiamonds = profile.diamonds
     val hasInfiniteLives = profile.hasInfiniteLives
-    Dialog(onDismissRequest = {}) {
+    Dialog(onDismissRequest = onBackToMap) {
         Card(
             shape = RoundedCornerShape(32.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             modifier = Modifier.fillMaxWidth().padding(16.dp)
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(

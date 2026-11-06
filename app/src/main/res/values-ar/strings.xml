@@ -1,16 +1,16 @@
 <resources>
-    <string name="app_name">بونبون بلوم</string>
+    <string name="app_name">Bonbon Bloom</string>
     <string name="settings_title">الإعدادات</string>
     <string name="sound_effects">المؤثرات الصوتية</string>
     <string name="music">الموسيقى</string>
     <string name="haptics">الاهتزاز اللمسي</string>
     <string name="language">اللغة</string>
-    <string name="privacy_policy_title">سياسة الخصوصية</string>
-    <string name="terms_of_service_title">شروط الخدمة</string>
-    <string name="restore_purchases">استعادة المشتريات</string>
-    <string name="delete_my_data">حذف بياناتي</string>
-    <string name="privacy_options">خيارات الخصوصية</string>
-    <string name="vip_subscription_terms">اشتراك يتجدد تلقائيًا. يتم خصم الدفعة من حساب Google Play عند التأكيد. يتجدد الاشتراك تلقائيًا ما لم يتم إلغاؤه قبل 24 ساعة على الأقل من نهاية الفترة الحالية. قم بالإدارة أو الإلغاء في أي وقت في متجر Google Play > الاشتراكات.</string>
+    <string name="bonbon_privacy_policy_title">سياسة الخصوصية</string>
+    <string name="bonbon_terms_of_service_title">شروط الخدمة</string>
+    <string name="bonbon_restore_purchases">استعادة المشتريات</string>
+    <string name="bonbon_delete_my_data">حذف بياناتي</string>
+    <string name="bonbon_privacy_options">خيارات الخصوصية</string>
+    <string name="bonbon_vip_subscription_terms">اشتراك يتجدد تلقائيًا. يتم خصم الدفعة من حساب Google Play عند التأكيد. يتجدد الاشتراك تلقائيًا ما لم يتم إلغاؤه قبل 24 ساعة على الأقل من نهاية الفترة الحالية. قم بالإدارة أو الإلغاء في أي وقت في متجر Google Play > الاشتراكات.</string>
 
     <string name="level_title">المستوى %1$d</string>
     <string name="moves_left">الحركات: %1$d</string>

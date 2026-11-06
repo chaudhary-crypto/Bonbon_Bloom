@@ -7,6 +7,7 @@ import com.example.security.MoveValidationResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -51,11 +52,15 @@ class GameEngine {
     private val _hintCandies = MutableStateFlow<List<GridPosition>>(emptyList())
     val hintCandies: StateFlow<List<GridPosition>> = _hintCandies.asStateFlow()
 
+    private val _clearingPositions = MutableStateFlow<Set<GridPosition>>(emptySet())
+    val clearingPositions: StateFlow<Set<GridPosition>> = _clearingPositions.asStateFlow()
+
     private val _activeBooster = MutableStateFlow(BoosterType.None)
     val activeBooster: StateFlow<BoosterType> = _activeBooster.asStateFlow()
 
     private var candyIdCounter = 0
-    private val engineScope = CoroutineScope(Dispatchers.Default)
+    private val engineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private var lastStateChangeTimestamp: Long = System.currentTimeMillis()
     private var width = 8
     private var height = 8
     private var comboCount = 0
@@ -345,8 +350,9 @@ class GameEngine {
         }
     }
 
-    fun applyShuffle() {
+    fun applyShuffle(attemptCount: Int = 0) {
         engineScope.launch {
+            lastStateChangeTimestamp = System.currentTimeMillis()
             _gameState.value = GameState.SpecialAction
             SoundManager.playBooster()
             val b = _board.value.map { it.toMutableList() }.toMutableList()
@@ -370,9 +376,17 @@ class GameEngine {
                 }
             }
             _board.value = b.map { it.toList() }
-            delay(300)
-            _gameState.value = GameState.Idle
-            resetHintTimer()
+            delay(250)
+            val matches = findMatchGroups(b)
+            if (matches.isNotEmpty()) {
+                comboCount = 0
+                processMatches(b, matches, pivotPos = matches.first().positions.first())
+            } else {
+                _gameState.value = GameState.Idle
+                ensureValidMovesExist(b, attemptCount)
+                resetHintTimer()
+            }
+            lastStateChangeTimestamp = System.currentTimeMillis()
         }
     }
 
@@ -413,7 +427,15 @@ class GameEngine {
     }
 
     fun swapCandies(pos1: GridPosition, pos2: GridPosition) {
-        if (_gameState.value != GameState.Idle) return
+        val now = System.currentTimeMillis()
+        if (_gameState.value != GameState.Idle) {
+            // Watchdog: If state has been non-idle for > 2000ms, force recovery to prevent deadlock!
+            if (now - lastStateChangeTimestamp > 2000L) {
+                _gameState.value = GameState.Idle
+            } else {
+                return
+            }
+        }
         if (_movesLeft.value <= 0) {
             checkGameOutcome()
             return
@@ -434,18 +456,16 @@ class GameEngine {
             _hintCandies.value = emptyList()
 
             engineScope.launch {
+                lastStateChangeTimestamp = System.currentTimeMillis()
                 try {
                     _gameState.value = GameState.Swapping
                     SoundManager.playSwap()
-
-                    // Decrement here before any suspends! 
-                    _movesLeft.value -= 1
 
                     // Visual swap
                     b[pos1.row][pos1.col] = b[pos1.row][pos1.col].copy(candy = c2)
                     b[pos2.row][pos2.col] = b[pos2.row][pos2.col].copy(candy = c1)
                     _board.value = b.map { it.toList() }
-                    delay(180)
+                    delay(160)
 
                     // Check Special Combinations
                     val isSpecialCombo = handleSpecialCombos(b, pos1, pos2, c1, c2)
@@ -456,17 +476,17 @@ class GameEngine {
                     // Normal match check
                     val matchGroups = findMatchGroups(b)
                     if (matchGroups.isEmpty()) {
-                        // Invalid swap: Revert back and refund the move!
-                        _movesLeft.value += 1
+                        // Invalid swap: Revert back without deducting moves
                         SoundManager.playInvalidSwap()
                         val bBack = b.map { it.toMutableList() }.toMutableList()
                         bBack[pos1.row][pos1.col] = bBack[pos1.row][pos1.col].copy(candy = c1)
                         bBack[pos2.row][pos2.col] = bBack[pos2.row][pos2.col].copy(candy = c2)
                         _board.value = bBack.map { it.toList() }
-                        delay(180)
+                        delay(160)
                         _gameState.value = GameState.Idle
                         resetHintTimer()
                     } else {
+                        _movesLeft.value = (_movesLeft.value - 1).coerceAtLeast(0)
                         comboCount = 0
                         processMatches(b, matchGroups, pivotPos = pos2)
                     }
@@ -475,6 +495,8 @@ class GameEngine {
                 } catch (e: Exception) {
                     android.util.Log.e("GameEngine", "Error during swap", e)
                     checkGameOutcome()
+                } finally {
+                    lastStateChangeTimestamp = System.currentTimeMillis()
                 }
             }
         } catch (e: Exception) {
@@ -517,15 +539,25 @@ class GameEngine {
                 triggerScreenShake(20f)
                 showComboBadge("SUPER RAINBOW WIPEOUT! 🌈", Color(0xFFFF4081))
 
+                val allPositions = (0 until height).flatMap { r -> (0 until width).map { c -> GridPosition(r, c) } }.toSet()
+                _clearingPositions.value = allPositions
+                _board.value = board.map { it.toList() }
+
                 for (r in 0 until height) {
                     for (c in 0 until width) {
-                        damageCell(board, GridPosition(r, c), isDirectMatch = true)
-                        spawnParticles(r, c, Color(0xFFFFEB3B), 10)
+                        spawnParticles(r, c, Color(0xFFFFEB3B), 6)
                     }
                 }
+                delay(220) // Removal animation duration
+
+                for (pos in allPositions) {
+                    damageCell(board, pos, isDirectMatch = true)
+                }
+                _clearingPositions.value = emptySet()
                 _score.value += 10000
                 _board.value = board.map { it.toList() }
-                delay(400)
+                delay(120)
+                _movesLeft.value = (_movesLeft.value - 1).coerceAtLeast(0)
                 applyCascadesAndRefill(board)
                 return true
             }
@@ -558,6 +590,7 @@ class GameEngine {
                 detonateAllRockets(board)
                 _board.value = board.map { it.toList() }
                 delay(350)
+                _movesLeft.value = (_movesLeft.value - 1).coerceAtLeast(0)
                 applyCascadesAndRefill(board)
                 return true
             }
@@ -586,6 +619,7 @@ class GameEngine {
                 detonateAllBombs(board)
                 _board.value = board.map { it.toList() }
                 delay(350)
+                _movesLeft.value = (_movesLeft.value - 1).coerceAtLeast(0)
                 applyCascadesAndRefill(board)
                 return true
             }
@@ -597,26 +631,37 @@ class GameEngine {
                 SoundManager.playRainbowBlast()
                 triggerScreenShake(10f)
 
-                var wiped = 0
+                val wipePositions = mutableSetOf<GridPosition>()
                 for (r in 0 until height) {
                     for (c in 0 until width) {
                         if (board[r][c].candy?.type == normalCandy.type) {
-                            damageCell(board, GridPosition(r, c), isDirectMatch = true)
-                            spawnParticles(r, c, getColorForCandy(normalCandy.type), 14)
-                            wiped++
+                            wipePositions.add(GridPosition(r, c))
                         }
                     }
                 }
-                // Clear rainbow candy itself
-                damageCell(board, pos1, isDirectMatch = true)
-                damageCell(board, pos2, isDirectMatch = true)
+                wipePositions.add(pos1)
+                wipePositions.add(pos2)
 
-                val pts = wiped * 120 + 500
+                _clearingPositions.value = wipePositions
+                _board.value = board.map { it.toList() }
+
+                for (p in wipePositions) {
+                    spawnParticles(p.row, p.col, getColorForCandy(normalCandy.type), 8)
+                }
+                delay(220) // Play removal animation!
+
+                for (p in wipePositions) {
+                    damageCell(board, p, isDirectMatch = true)
+                }
+                _clearingPositions.value = emptySet()
+
+                val pts = (wipePositions.size - 2).coerceAtLeast(0) * 120 + 500
                 _score.value += pts
                 spawnFloatingScore(pos2.row, pos2.col, "+$pts 🌈", Color(0xFFFF4081))
                 _board.value = board.map { it.toList() }
 
-                delay(350)
+                delay(120)
+                _movesLeft.value = (_movesLeft.value - 1).coerceAtLeast(0)
                 applyCascadesAndRefill(board)
                 return true
             }
@@ -645,6 +690,7 @@ class GameEngine {
                 _score.value += 3000
                 _board.value = board.map { it.toList() }
                 delay(350)
+                _movesLeft.value = (_movesLeft.value - 1).coerceAtLeast(0)
                 applyCascadesAndRefill(board)
                 return true
             }
@@ -662,12 +708,17 @@ class GameEngine {
                 _score.value += 1800
                 _board.value = board.map { it.toList() }
                 delay(300)
+                _movesLeft.value = (_movesLeft.value - 1).coerceAtLeast(0)
                 applyCascadesAndRefill(board)
                 return true
             }
 
             // Bomb + Bomb: 5x5 massive explosion!
             isBomb1 && isBomb2 -> {
+                _gameState.value = GameState.SpecialAction
+                SoundManager.playBombExplosion()
+                triggerScreenShake(16f)
+                showComboBadge("MASSIVE BLAST! 💣💣", Color(0xFFFF1744))
                 _gameState.value = GameState.SpecialAction
                 SoundManager.playBombExplosion()
                 triggerScreenShake(16f)
@@ -683,6 +734,55 @@ class GameEngine {
                 _score.value += 2500
                 _board.value = board.map { it.toList() }
                 delay(350)
+                _movesLeft.value = (_movesLeft.value - 1).coerceAtLeast(0)
+                applyCascadesAndRefill(board)
+                return true
+            }
+
+            // Single Rocket swapped with normal candy: Detonates rocket across row or column!
+            isRocket1 || isRocket2 -> {
+                _gameState.value = GameState.SpecialAction
+                SoundManager.playRocketBlast()
+                triggerScreenShake(10f)
+                val isR1 = isRocket1
+                val rocket = if (isR1) c1 else c2
+                val targetPos = if (isR1) pos2 else pos1
+
+                if (rocket.specialType == SpecialType.RocketRow) {
+                    for (c in 0 until width) damageCell(board, GridPosition(targetPos.row, c), isDirectMatch = true)
+                } else {
+                    for (r in 0 until height) damageCell(board, GridPosition(r, targetPos.col), isDirectMatch = true)
+                }
+
+                _score.value += 1000
+                _board.value = board.map { it.toList() }
+                delay(280)
+                _movesLeft.value = (_movesLeft.value - 1).coerceAtLeast(0)
+                applyCascadesAndRefill(board)
+                return true
+            }
+
+            // Single Bomb swapped with normal candy: Detonates 3x3 explosive blast!
+            isBomb1 || isBomb2 -> {
+                _gameState.value = GameState.SpecialAction
+                SoundManager.playBombExplosion()
+                triggerScreenShake(12f)
+                val bombPos = if (isBomb1) pos2 else pos1
+
+                for (dr in -1..1) {
+                    for (dc in -1..1) {
+                        val nr = bombPos.row + dr
+                        val nc = bombPos.col + dc
+                        if (nr in 0 until height && nc in 0 until width) {
+                            damageCell(board, GridPosition(nr, nc), isDirectMatch = true)
+                        }
+                    }
+                }
+
+                _score.value += 1200
+                _board.value = board.map { it.toList() }
+                delay(300)
+                _movesLeft.value = (_movesLeft.value - 1).coerceAtLeast(0)
                 applyCascadesAndRefill(board)
                 return true
             }
@@ -736,7 +836,8 @@ class GameEngine {
     private suspend fun processMatches(
         board: List<MutableList<Cell>>,
         matchGroups: List<MatchGroup>,
-        pivotPos: GridPosition
+        pivotPos: GridPosition,
+        cascadeDepth: Int = 0
     ) {
         comboCount++
         _gameState.value = GameState.Matching
@@ -838,17 +939,26 @@ class GameEngine {
         }
         positionsToClear.addAll(extraPositions)
 
-        // Apply score and clear candies
+        // Apply score
         val matchScore = positionsToClear.size * 20 * comboCount
         _score.value += matchScore
         spawnFloatingScore(pivotPos.row, pivotPos.col, "+$matchScore", Color(0xFFFFD54F))
 
+        // Phase 1: Trigger removal animation on all matched candies!
+        _clearingPositions.value = positionsToClear.toSet()
+        _board.value = board.map { it.toList() }
+
         for (pos in positionsToClear) {
             val c = board[pos.row][pos.col].candy
             if (c != null) {
-                spawnParticles(pos.row, pos.col, getColorForCandy(c.type), 8)
+                spawnParticles(pos.row, pos.col, getColorForCandy(c.type), 10)
                 checkObjectiveOnCandyCleared(c.type)
             }
+        }
+        delay(220) // Play smooth pop/burst removal animation
+
+        // Phase 2: Clear matched candies from cells
+        for (pos in positionsToClear) {
             damageCell(board, pos, isDirectMatch = true)
         }
 
@@ -863,35 +973,55 @@ class GameEngine {
             spawnParticles(pos.row, pos.col, Color.White, 16)
         }
 
+        _clearingPositions.value = emptySet()
         _board.value = board.map { it.toList() }
-        delay(220)
+        delay(60)
 
-        applyCascadesAndRefill(board)
+        // Phase 3: Cascade and refill sequence
+        applyCascadesAndRefill(board, cascadeDepth)
     }
 
-    private suspend fun applyCascadesAndRefill(board: List<MutableList<Cell>>) {
-        // 1. Drop candies (Gravity)
-        _gameState.value = GameState.Falling
-        applyGravity(board)
-        _board.value = board.map { it.toList() }
-        delay(180)
-
-        // 2. Refill empty cells
-        refillBoard(board)
-        _board.value = board.map { it.toList() }
-        delay(220)
-
-        // 3. Check cascading matches
-        val nextMatches = findMatchGroups(board)
-        if (nextMatches.isNotEmpty()) {
-            processMatches(board, nextMatches, pivotPos = nextMatches.first().positions.first())
-        } else {
-            // Cascade finished! Check game outcome and deadlock
+    private suspend fun applyCascadesAndRefill(board: List<MutableList<Cell>>, cascadeDepth: Int = 0) {
+        lastStateChangeTimestamp = System.currentTimeMillis()
+        if (cascadeDepth > 20) {
+            // Safety circuit breaker against infinite cascades
             checkGameOutcome()
             if (_gameState.value == GameState.Idle) {
                 ensureValidMovesExist(board)
                 resetHintTimer()
             }
+            return
+        }
+
+        try {
+            // 1. Drop candies (Gravity)
+            _gameState.value = GameState.Falling
+            applyGravity(board)
+            _board.value = board.map { it.toList() }
+            delay(150)
+
+            // 2. Refill empty cells
+            refillBoard(board)
+            _board.value = board.map { it.toList() }
+            delay(180)
+
+            // 3. Check cascading matches
+            val nextMatches = findMatchGroups(board)
+            if (nextMatches.isNotEmpty()) {
+                processMatches(board, nextMatches, pivotPos = nextMatches.first().positions.first(), cascadeDepth = cascadeDepth + 1)
+            } else {
+                // Cascade finished! Check game outcome and deadlock
+                checkGameOutcome()
+                if (_gameState.value == GameState.Idle) {
+                    ensureValidMovesExist(board)
+                    resetHintTimer()
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("GameEngine", "Error during cascades", e)
+            checkGameOutcome()
+        } finally {
+            lastStateChangeTimestamp = System.currentTimeMillis()
         }
     }
 
@@ -914,7 +1044,7 @@ class GameEngine {
         }
 
         var newObstacle = currentCell.obstacle
-        if (newObstacle == ObstacleType.Chocolate && isDirectMatch) {
+        if ((newObstacle == ObstacleType.Chocolate || newObstacle == ObstacleType.Ice) && isDirectMatch) {
             newObstacle = ObstacleType.None
         }
 
@@ -950,7 +1080,7 @@ class GameEngine {
         for (c in 0 until width) {
             var emptyRow = height - 1
             for (r in height - 1 downTo 0) {
-                if (board[r][c].obstacle != ObstacleType.Chocolate) {
+                if (board[r][c].obstacle != ObstacleType.Chocolate && board[r][c].obstacle != ObstacleType.Ice) {
                     if (board[r][c].candy != null) {
                         if (emptyRow != r) {
                             board[emptyRow][c] = board[emptyRow][c].copy(candy = board[r][c].candy)
@@ -968,11 +1098,15 @@ class GameEngine {
     private fun refillBoard(board: List<MutableList<Cell>>) {
         for (c in 0 until width) {
             for (r in 0 until height) {
-                if (board[r][c].obstacle != ObstacleType.Chocolate && board[r][c].candy == null) {
+                if (board[r][c].obstacle != ObstacleType.Chocolate && board[r][c].obstacle != ObstacleType.Ice && board[r][c].candy == null) {
                     board[r][c] = board[r][c].copy(candy = generateRandomCandy(allowRainbow = true))
                 }
             }
         }
+    }
+
+    fun evaluateGameOutcome() {
+        checkGameOutcome()
     }
 
     private fun checkGameOutcome() {
@@ -995,11 +1129,28 @@ class GameEngine {
         }
     }
 
-    private fun ensureValidMovesExist(board: List<MutableList<Cell>>) {
+    private fun ensureValidMovesExist(board: List<MutableList<Cell>>, attemptCount: Int = 0) {
         if (!hasAnyValidMove(board)) {
+            if (attemptCount >= 3) {
+                // Guarantee a move by creating an adjacent match opportunity
+                forceInjectValidMove(board)
+                _board.value = board.map { it.toList() }
+                _gameState.value = GameState.Idle
+                return
+            }
             // Auto reshuffle if deadlock!
             showComboBadge("RESHUFFLING... 🔄", Color(0xFF00E5FF))
-            applyShuffle()
+            applyShuffle(attemptCount + 1)
+        }
+    }
+
+    private fun forceInjectValidMove(board: List<MutableList<Cell>>) {
+        val type = CandyType.Strawberry
+        if (width >= 4 && height >= 2) {
+            board[0][0] = board[0][0].copy(candy = Candy(++candyIdCounter, type, SpecialType.None))
+            board[0][1] = board[0][1].copy(candy = Candy(++candyIdCounter, type, SpecialType.None))
+            board[0][2] = board[0][2].copy(candy = Candy(++candyIdCounter, CandyType.Lemon, SpecialType.None))
+            board[0][3] = board[0][3].copy(candy = Candy(++candyIdCounter, type, SpecialType.None))
         }
     }
 
@@ -1024,7 +1175,7 @@ class GameEngine {
         val c2 = board[p2.row][p2.col].candy ?: return false
 
         if (c1.specialType == SpecialType.Rainbow || c2.specialType == SpecialType.Rainbow) return true
-        if (c1.specialType != SpecialType.None && c2.specialType != SpecialType.None) return true
+        if (c1.specialType != SpecialType.None || c2.specialType != SpecialType.None) return true
 
         val copy = board.map { it.toMutableList() }
         copy[p1.row][p1.col] = copy[p1.row][p1.col].copy(candy = c2)
@@ -1124,7 +1275,7 @@ class GameEngine {
         val isCross: Boolean
     )
 
-    private fun findMatchGroups(board: List<List<Cell>>): List<MatchGroup> {
+    internal fun findMatchGroups(board: List<List<Cell>>): List<MatchGroup> {
         val groups = mutableListOf<MatchGroup>()
         val horizontalMatches = mutableListOf<Pair<CandyType, Set<GridPosition>>>()
         val verticalMatches = mutableListOf<Pair<CandyType, Set<GridPosition>>>()

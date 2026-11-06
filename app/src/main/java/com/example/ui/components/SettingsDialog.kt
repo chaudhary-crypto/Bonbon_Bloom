@@ -266,7 +266,26 @@ fun SettingsDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        try {
+                            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                data = Uri.parse("mailto:support@earnvero.app")
+                                putExtra(Intent.EXTRA_SUBJECT, "Bonbon Bloom Player Support [v${com.example.BuildConfig.VERSION_NAME}]")
+                            }
+                            context.startActivity(intent)
+                        } catch (_: Throwable) {}
+                    },
+                    modifier = Modifier.fillMaxWidth().height(38.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFD54F))
+                ) {
+                    Text("✉️ Support & Feedback (support@earnvero.app)", fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // Delete My Data (GDPR / Play Store mandatory compliance)
                 Button(
@@ -279,7 +298,7 @@ fun SettingsDialog(
                 }
 
                 Text(
-                    text = "Bonbon Bloom v1.0.0 • Offline-First Match-3 Engine",
+                    text = "Bonbon Bloom v${com.example.BuildConfig.VERSION_NAME} • Offline-First Match-3 Engine",
                     fontSize = 10.sp,
                     color = Color.White.copy(alpha = 0.5f),
                     modifier = Modifier
@@ -493,18 +512,27 @@ fun InAppPolicyReaderDialog(
                         .verticalScroll(rememberScrollState())
                 ) {
                     Text(
-                        text = "Bonbon Bloom is built with an offline-first privacy design. All gameplay, levels, stars, scores, and inventory are stored locally on your device.\n\n" +
-                                "1. DATA COLLECTED LOCALLY\n" +
-                                "• Saved game progress, coins, gems, high scores, boosters, and audio settings are kept on your device storage.\n" +
-                                "• Cryptographic integrity signatures (HMAC-SHA256) protect against local memory tampering.\n\n" +
-                                "2. THIRD-PARTY SDKs\n" +
-                                "• Google AdMob: Non-personalized and personalized banner, interstitial, and rewarded video ads when online.\n" +
-                                "• Google Play Billing: In-app purchases, subscriptions, and receipt verification.\n" +
-                                "• Android WorkManager: Energy-efficient on-device local notifications (lives full, daily streak).\n\n" +
-                                "3. CHILDREN'S PRIVACY\n" +
-                                "Bonbon Bloom is rated for General Audience (13+). We do not knowingly collect personal information from children.\n\n" +
-                                "4. YOUR CHOICES & DATA DELETION\n" +
-                                "You can delete all locally saved game progress at any time via Settings > 'Delete My Data'. European users can revoke ad consent via Settings > 'Privacy Options'.",
+                        text = "Bonbon Bloom is built with player privacy at its core. Gameplay progress and game records are stored locally on your device.\n\n" +
+                                "1. ADVERTISING & GOOGLE ADMOB\n" +
+                                "• We partner with Google AdMob to display banner, interstitial, and rewarded ads.\n" +
+                                "• Google AdMob may process your device's Android Advertising ID (AD_ID), general IP location, and performance metrics to deliver ads, prevent fraudulent activity, and enforce frequency limits.\n" +
+                                "• Learn how Google uses information from apps: https://policies.google.com/technologies/partner-sites\n\n" +
+                                "2. USER CONSENT & PRIVACY CONTROLS\n" +
+                                "• Users in the European Economic Area (EEA) and the UK are presented with the Google Certified User Messaging Platform (UMP) consent dialog.\n" +
+                                "• You can review, modify, or revoke your ad consent at any time directly in this app via Settings > 'Privacy Options (Ad Consent)'.\n" +
+                                "• You can reset or delete your Advertising ID anytime via your device Settings > Google > Ads.\n\n" +
+                                "3. AD PLACEMENT & ACCIDENTAL CLICK PREVENTION\n" +
+                                "• Banner ads are placed in dedicated containers clearly separated from the game board.\n" +
+                                "• Interstitial ads never interrupt active moves, board animations, or level launches.\n" +
+                                "• Rewarded video ads are strictly optional, player-initiated, and clearly labeled with the exact reward earned.\n\n" +
+                                "4. CHILDREN'S PRIVACY (COPPA)\n" +
+                                "Bonbon Bloom is intended for a general audience (13+). We do not knowingly collect personal information from children under 13.\n\n" +
+                                "5. LOCAL DATA & PURCHASES\n" +
+                                "• All progress, high scores, coins, gems, and booster inventories are kept locally on your device.\n" +
+                                "• In-app purchases are securely processed through Google Play Billing.\n" +
+                                "• You can delete all local data anytime via Settings > 'Delete My Data'.\n\n" +
+                                "6. SUPPORT & CONTACT\n" +
+                                "For assistance, privacy questions, or data deletion inquiries, contact our support team at: support@earnvero.app",
                         fontSize = 12.sp,
                         color = Color(0xFFE0E0E0),
                         lineHeight = 18.sp
@@ -520,7 +548,7 @@ fun InAppPolicyReaderDialog(
                     OutlinedButton(
                         onClick = {
                             try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://bonbonbloom.game/privacy"))
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.earnvero.app/privacy"))
                                 context.startActivity(intent)
                             } catch (_: Throwable) {}
                         },
@@ -593,7 +621,9 @@ fun InAppTermsReaderDialog(
                                 "4. FAIR PLAY & INTEGRITY\n" +
                                 "Players may not modify, reverse engineer, or use unauthorized tools to tamper with saved progress or game balances. Tampered saves are subject to balance reset.\n\n" +
                                 "5. NO WARRANTIES\n" +
-                                "The game is provided 'as is' for your personal entertainment.",
+                                "The game is provided 'as is' for your personal entertainment.\n\n" +
+                                "6. CONTACT & SUPPORT\n" +
+                                "Questions regarding these terms? Contact: support@earnvero.app",
                         fontSize = 12.sp,
                         color = Color(0xFFE0E0E0),
                         lineHeight = 18.sp
@@ -609,7 +639,7 @@ fun InAppTermsReaderDialog(
                     OutlinedButton(
                         onClick = {
                             try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://bonbonbloom.game/terms"))
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.earnvero.app/terms"))
                                 context.startActivity(intent)
                             } catch (_: Throwable) {}
                         },
@@ -803,7 +833,7 @@ fun DeveloperSandboxDialog(
                     ) {
                         OutlinedButton(
                             onClick = {
-                                com.example.ads.AdManager.showInterstitial(activity, force = true)
+                                com.example.ads.AdManager.showInterstitial(activity, currentLevelId = 11)
                             },
                             modifier = Modifier.weight(1f).height(38.dp),
                             shape = RoundedCornerShape(10.dp),

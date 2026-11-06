@@ -201,32 +201,7 @@ fun AccountProfileDialog(
                             )
                         }
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    SoundManager.playButtonClick()
-                                    onOpenSecurityDialog()
-                                },
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("🛡️", fontSize = 16.sp)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Anti-Cheat Shield:", fontSize = 13.sp, color = Color.LightGray)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = if (profile.isCheatingDetected) "⚠️ Alert" else "Protected (v2.6)",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (profile.isCheatingDetected) Color(0xFFFF5252) else Color(0xFF40C4FF)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("›", fontSize = 14.sp, color = Color.White)
-                            }
-                        }
+
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),

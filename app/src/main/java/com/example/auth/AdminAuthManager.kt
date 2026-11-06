@@ -19,13 +19,20 @@ object AdminAuthManager {
     // Salted SHA-256 hash of the administrative credentials (computed securely)
     private const val ADMIN_HASH = "40dfe921b342de87004e62c8457544ca7e74cc81307f78f0815629a3b5f925c8"
     
-    // Canonical admin username
+    // Canonical admin username and owner account
     const val ADMIN_USERNAME = "omtesh"
     const val ADMIN_EMAIL = "omtesh@bonbonbloom.game"
+    const val OWNER_EMAIL = "bhatiaomtesh02@gmail.com"
 
     fun isAdminIdentifier(input: String): Boolean {
         val clean = input.trim().lowercase()
-        return clean == ADMIN_USERNAME || clean == ADMIN_EMAIL
+        return clean == ADMIN_USERNAME || clean == ADMIN_EMAIL || clean == OWNER_EMAIL
+    }
+
+    fun isOwnerOrAdmin(identifier: String?): Boolean {
+        if (identifier.isNullOrBlank()) return false
+        val clean = identifier.trim().lowercase()
+        return clean == ADMIN_USERNAME || clean == ADMIN_EMAIL || clean == OWNER_EMAIL
     }
 
     /**

@@ -29,20 +29,18 @@ class GameApplication : Application() {
             } catch (_: Throwable) {}
         }
 
-        // Initialize Google Mobile Ads SDK safely
+        // Initialize Google Mobile Ads (AdMob) SDK on launch
         try {
-            val requestConfig = com.google.android.gms.ads.MobileAds.getRequestConfiguration().toBuilder()
-                .setTagForChildDirectedTreatment(com.google.android.gms.ads.RequestConfiguration.TAG_FOR_CHILD_DIRECTED_TREATMENT_FALSE)
-                .build()
-            com.google.android.gms.ads.MobileAds.setRequestConfiguration(requestConfig)
-
-            MobileAds.initialize(this) {
-                try {
-                    com.example.ads.AdManager.preloadAds(this)
-                } catch (_: Throwable) {}
-            }
+            com.example.ads.ConsentManager.initializeMobileAds(this)
         } catch (e: Throwable) {
-            Log.w("GameApplication", "Ads SDK initialization skipped: ${e.message}")
+            Log.w("GameApplication", "AdMob startup initialization deferred: ${e.message}")
+        }
+
+        // Initialize Unity Ads SDK on launch (Game ID 800427695)
+        try {
+            com.example.ads.UnityAdsManager.initialize(this, testMode = false)
+        } catch (e: Throwable) {
+            Log.w("GameApplication", "Unity Ads startup initialization deferred: ${e.message}")
         }
 
         // Initialize Google Play Billing 7.x
@@ -69,6 +67,8 @@ class GameApplication : Application() {
             )
             .build()
         }
+
+        com.example.data.AccountStorage.init(this)
 
         CoroutineScope(Dispatchers.IO).launch {
             try {

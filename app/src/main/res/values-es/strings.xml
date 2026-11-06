@@ -5,12 +5,12 @@
     <string name="music">Música</string>
     <string name="haptics">Vibración háptica</string>
     <string name="language">Idioma</string>
-    <string name="privacy_policy_title">Política de privacidad</string>
-    <string name="terms_of_service_title">Términos del servicio</string>
-    <string name="restore_purchases">Restaurar compras</string>
-    <string name="delete_my_data">Eliminar mis datos</string>
-    <string name="privacy_options">Opciones de privacidad</string>
-    <string name="vip_subscription_terms">Suscripción de renovación automática. El pago se cargará a la cuenta de Google Play en la confirmación. La suscripción se renueva automáticamente a menos que se cancele al menos 24 horas antes del final del período actual. Administra o cancela en cualquier momento en Google Play Store > Suscripciones.</string>
+    <string name="bonbon_privacy_policy_title">Política de privacidad</string>
+    <string name="bonbon_terms_of_service_title">Términos del servicio</string>
+    <string name="bonbon_restore_purchases">Restaurar compras</string>
+    <string name="bonbon_delete_my_data">Eliminar mis datos</string>
+    <string name="bonbon_privacy_options">Opciones de privacidad</string>
+    <string name="bonbon_vip_subscription_terms">Suscripción de renovación automática. El pago se cargará a la cuenta de Google Play en la confirmación. La suscripción se renueva automáticamente a menos que se cancele al menos 24 horas antes del final del período actual. Administra o cancela en cualquier momento en Google Play Store > Suscripciones.</string>
 
     <string name="level_title">Nivel %1$d</string>
     <string name="moves_left">Movimientos: %1$d</string>

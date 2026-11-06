@@ -146,20 +146,9 @@ object LevelCatalog {
         }
 
         // Obstacles placed according to chapter and level difficulty
-        val jellyList = mutableListOf<GridPosition>()
-        val iceList = mutableListOf<GridPosition>()
         val chocolateList = mutableListOf<GridPosition>()
-
-        if (objective is LevelObjective.ClearAllJelly || (id > 5 && id % 2 == 0)) {
-            val count = if (objective is LevelObjective.ClearAllJelly) objective.total else 8
-            for (r in 2..5) {
-                for (c in 2..5) {
-                    if (jellyList.size < count) {
-                        jellyList.add(GridPosition(r, c))
-                    }
-                }
-            }
-        }
+        val iceList = mutableListOf<GridPosition>()
+        val jellyList = mutableListOf<GridPosition>()
 
         // Chocolate blockers from Chapter 2 onward
         if (chapterNum >= 2 && (difficulty == LevelDifficulty.Hard || difficulty == LevelDifficulty.Boss || id % 4 == 0)) {
@@ -177,6 +166,18 @@ object LevelCatalog {
             iceList.add(GridPosition(3, 4))
             iceList.add(GridPosition(4, 3))
             iceList.add(GridPosition(4, 4))
+        }
+
+        if (objective is LevelObjective.ClearAllJelly || (id > 5 && id % 2 == 0)) {
+            val count = if (objective is LevelObjective.ClearAllJelly) objective.total else 8
+            for (r in 1..6) {
+                for (c in 1..6) {
+                    val pos = GridPosition(r, c)
+                    if (jellyList.size < count && !chocolateList.contains(pos)) {
+                        jellyList.add(pos)
+                    }
+                }
+            }
         }
 
         return LevelConfig(

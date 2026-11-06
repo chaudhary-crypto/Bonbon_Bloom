@@ -5,12 +5,12 @@
     <string name="music">Música</string>
     <string name="haptics">Vibração tátil</string>
     <string name="language">Idioma</string>
-    <string name="privacy_policy_title">Política de Privacidade</string>
-    <string name="terms_of_service_title">Termos de Serviço</string>
-    <string name="restore_purchases">Restaurar compras</string>
-    <string name="delete_my_data">Excluir meus dados</string>
-    <string name="privacy_options">Opções de privacidade</string>
-    <string name="vip_subscription_terms">Assinatura com renovação automática. O pagamento será cobrado na conta do Google Play na confirmação. A assinatura é renovada automaticamente, a menos que seja cancelada pelo menos 24 horas antes do final do período atual. Gerencie ou cancele a qualquer momento no Google Play Store > Assinaturas.</string>
+    <string name="bonbon_privacy_policy_title">Política de Privacidade</string>
+    <string name="bonbon_terms_of_service_title">Termos de Serviço</string>
+    <string name="bonbon_restore_purchases">Restaurar compras</string>
+    <string name="bonbon_delete_my_data">Excluir meus dados</string>
+    <string name="bonbon_privacy_options">Opções de privacidade</string>
+    <string name="bonbon_vip_subscription_terms">Assinatura com renovação automática. O pagamento será cobrado na conta do Google Play na confirmação. A assinatura é renovada automaticamente, a menos que seja cancelada pelo menos 24 horas antes do final do período atual. Gerencie ou cancele a qualquer momento no Google Play Store > Assinaturas.</string>
 
     <string name="level_title">Nível %1$d</string>
     <string name="moves_left">Movimentos: %1$d</string>

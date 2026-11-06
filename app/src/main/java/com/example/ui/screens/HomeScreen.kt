@@ -96,7 +96,14 @@ fun HomeScreen(
     var showNotificationRationaleDialog by remember { mutableStateOf(false) }
     var shopInitialTab by remember { mutableStateOf(0) }
     val context = LocalContext.current
-    val activity = context as? Activity
+    val activity = remember(context) {
+        var cur: android.content.Context? = context
+        while (cur is android.content.ContextWrapper) {
+            if (cur is Activity) break
+            cur = cur.baseContext
+        }
+        cur as? Activity
+    }
 
     LaunchedEffect(profile.highestUnlockedLevel) {
         if (profile.highestUnlockedLevel > 1 && !profile.hasAskedNotificationPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -107,6 +114,8 @@ fun HomeScreen(
     LaunchedEffect(profile.musicEnabled) {
         if (profile.musicEnabled) {
             SoundManager.startMusic()
+        } else {
+            SoundManager.stopMusic()
         }
     }
 
@@ -204,8 +213,8 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Admin Crown Badge (Visible when logged in as Administrator)
-                    if (profile.isAdmin) {
+                    // Admin Crown Badge (Visible ONLY to verified Owner/Administrator)
+                    if (profile.isAdmin && com.example.auth.AdminAuthManager.isOwnerOrAdmin(profile.email)) {
                         Surface(
                             shape = RoundedCornerShape(18.dp),
                             color = Color(0xFFFFD700),
@@ -642,7 +651,15 @@ fun HomeScreen(
                 Button(
                     onClick = {
                         SoundManager.playButtonClick()
-                        activity?.let { act ->
+                        val act = activity ?: run {
+                            var cur: android.content.Context? = context
+                            while (cur is android.content.ContextWrapper) {
+                                if (cur is Activity) return@run cur
+                                cur = cur.baseContext
+                            }
+                            cur as? Activity
+                        }
+                        if (act != null) {
                             AdManager.showRewarded(
                                 activity = act,
                                 onRewardEarned = {
@@ -650,10 +667,11 @@ fun HomeScreen(
                                     SoundManager.playLevelWin()
                                 }
                             )
-                        } ?: run {
-                            viewModel.addCoins(150)
+                        } else {
+                            android.widget.Toast.makeText(context, "Cannot display ad: Activity not found", android.widget.Toast.LENGTH_SHORT).show()
                         }
                     },
+
                     modifier = Modifier
                         .fillMaxWidth(0.9f)
                         .height(44.dp),
@@ -772,7 +790,11 @@ fun HomeScreen(
                     viewModel.logout()
                 },
                 onDeleteAccount = {
-                    viewModel.deleteAccount()
+                    viewModel.deleteAccount { success, errorMsg ->
+                        if (!success) {
+                            android.widget.Toast.makeText(context, errorMsg ?: "Account deletion failed.", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }
                 }
             )
         }
@@ -798,7 +820,13 @@ fun HomeScreen(
                 onToggleMusic = { viewModel.toggleMusic() },
                 onToggleHaptics = { viewModel.toggleHaptics(it) },
                 onLanguageSelected = { viewModel.setLanguage(it) },
-                onDeleteMyData = { viewModel.deleteAccount() },
+                onDeleteMyData = {
+                    viewModel.deleteAccount { success, errorMsg ->
+                        if (!success) {
+                            android.widget.Toast.makeText(context, errorMsg ?: "Account deletion failed.", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
                 onSecretAdminUnlocked = { viewModel.loginAsAdmin() },
                 onSandboxAddCoins = { viewModel.addCoins(5000) },
                 onSandboxAddDiamonds = { viewModel.addDiamonds(200) },

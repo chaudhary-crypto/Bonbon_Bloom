@@ -1,8 +1,108 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isImmutable(field) {
+      return !(field in request.resource.data) || 
+             (resource != null && request.resource.data[field] == resource.data[field]);
+    }
+
+    // User profile document: Zero-trust architecture
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // 1. Players can only read their own cloud save document
+      allow read: if isOwner(userId);
+
+      // 2. Account deletion: Players can delete their own profile document
+      allow delete: if isOwner(userId);
+
+      // 3. Initial profile creation: strictly bounded starting values
+      allow create: if isOwner(userId)
+        && (!('highestUnlockedLevel' in request.resource.data) || 
+            (request.resource.data.highestUnlockedLevel is int && 
+             request.resource.data.highestUnlockedLevel == 1))
+        && (!('coins' in request.resource.data) || 
+            (request.resource.data.coins is int && 
+             request.resource.data.coins >= 0 && 
+             request.resource.data.coins <= 500))
+        && (!('diamonds' in request.resource.data) || 
+            (request.resource.data.diamonds is int && 
+             request.resource.data.diamonds >= 0 && 
+             request.resource.data.diamonds <= 25))
+        && (!('isVipSubscribed' in request.resource.data) || request.resource.data.isVipSubscribed == false)
+        && (!('hasRemovedAds' in request.resource.data) || request.resource.data.hasRemovedAds == false)
+        && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false);
+
+      // 4. Profile updates: Client CANNOT modify trusted currency, VIP, or entitlements directly
+      allow update: if isOwner(userId)
+        // Progression is monotonic (can only advance, never roll back, max 1000)
+        && (!('highestUnlockedLevel' in request.resource.data) || 
+            (request.resource.data.highestUnlockedLevel is int &&
+             request.resource.data.highestUnlockedLevel <= 1000 &&
+             (resource == null || request.resource.data.highestUnlockedLevel >= resource.data.highestUnlockedLevel)))
+        // Trusted balances and entitlements MUST be immutable to client updates
+        && isImmutable('coins')
+        && isImmutable('diamonds')
+        && isImmutable('isVipSubscribed')
+        && isImmutable('vipExpiryTimestamp')
+        && isImmutable('hasRemovedAds')
+        && isImmutable('isAdmin');
+
+      // 5. Purchases subcollection: Durable audit log of Google Play purchases
+      match /purchases/{purchaseId} {
+        allow read: if isOwner(userId);
+        // Client can only create an initial pending purchase record with idempotency key
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasAll(['productId', 'purchaseToken', 'timestamp'])
+          && request.resource.data.timestamp is int;
+        // Purchases are immutable and permanent once recorded
+        allow update, delete: if false;
+      }
+
+      // 5b. Auditable Transaction Ledger: Readable by account owner, writable only by trusted backend
+      match /ledger/{ledgerId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
+      // 6. Reward requests subcollection: Durable log of verified AdMob rewarded sessions
+      match /reward_requests/{requestId} {
+        allow read: if isOwner(userId);
+        // Client can create a reward verification record with transactionId and amount
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasAll(['transactionId', 'amount', 'timestamp'])
+          && request.resource.data.amount is int
+          && request.resource.data.amount <= 100
+          && request.resource.data.timestamp is int;
+        allow update, delete: if false;
+      }
+
+      // 7. Deletion requests subcollection: GDPR & Google Play account deletion auditing
+      match /deletion_requests/{requestId} {
+        allow read, create: if isOwner(userId);
+        allow update, delete: if false;
+      }
+    }
+
+    // Public / server-side account deletion requests collection (for web portal requests)
+    match /account_deletion_requests/{requestId} {
+      allow create: if request.resource.data.keys().hasAll(['email', 'timestamp', 'status'])
+                    && request.resource.data.email is string
+                    && request.resource.data.status == 'PENDING';
+      allow read, update, delete: if false;
+    }
+
+    // Default deny for all other collections
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

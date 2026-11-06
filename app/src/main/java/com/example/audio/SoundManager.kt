@@ -16,20 +16,21 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Ultra-stable, zero-crash procedural sound and music synthesizer for all Android devices.
+ * Ultra-stable, zero-crash procedural sound and music synthesizer for Bonbon Bloom.
  * 
- * Uses a SINGLE streaming AudioTrack in MODE_STREAM with a unified audio mixer:
- * - Exactly ONE AudioTrack instance across the entire application lifecycle.
- * - Never exhausts Android's native 32-track OS limit (preventing AudioFlinger crashes).
- * - Queries and honors system AudioTrack.getMinBufferSize() on every device architecture.
- * - Safe error boundaries around all audio hardware interactions.
+ * Key guarantees:
+ * - Background music is DISABLED by default so users are never irritated by unexpected chiptunes.
+ * - When sound effects play, the audio engine runs strictly for the duration of the effect.
+ * - Once sound effects finish and music is not enabled, the audio track stops immediately.
+ * - In background (onPause/onStop), the audio engine is unconditionally stopped and released.
+ * - Uses a SINGLE streaming AudioTrack in MODE_STREAM with a unified audio mixer.
  */
 object SoundManager {
     private const val TAG = "SoundManager"
     private val scope = CoroutineScope(Dispatchers.Default)
 
     var soundEnabled: Boolean = true
-    var musicEnabled: Boolean = true
+    var musicEnabled: Boolean = false // Default OFF to ensure quiet, peaceful gameplay
 
     @Volatile
     private var isAppInForeground: Boolean = false
@@ -59,25 +60,17 @@ object SoundManager {
     private var musicPhase = 0.0
     private var bassPhase = 0.0
 
-    // Cheerful melody in C Major
-    private val bpm = 126
+    // Gentle, soft ambient melody in C Major (played ONLY if player explicitly enables music)
+    private val bpm = 112
     private val secondsPerBeat = 60.0 / bpm
     private val melodyNotes = listOf(
-        // Bar 1
         523.25 to 1.0, 659.25 to 1.0, 783.99 to 1.0, 659.25 to 1.0,
-        // Bar 2
         392.00 to 1.0, 587.33 to 1.0, 783.99 to 1.0, 587.33 to 1.0,
-        // Bar 3
         440.00 to 1.0, 523.25 to 1.0, 659.25 to 1.0, 880.00 to 1.0,
-        // Bar 4
         349.23 to 1.0, 523.25 to 1.0, 659.25 to 1.0, 523.25 to 1.0,
-        // Bar 5
         1046.50 to 1.0, 783.99 to 0.5, 880.00 to 0.5, 783.99 to 1.0, 659.25 to 1.0,
-        // Bar 6
         587.33 to 1.0, 659.25 to 1.0, 783.99 to 1.0, 587.33 to 1.0,
-        // Bar 7
         523.25 to 1.0, 659.25 to 1.0, 783.99 to 1.0, 1046.50 to 1.0,
-        // Bar 8
         783.99 to 1.5, 659.25 to 0.5, 523.25 to 2.0
     )
 
@@ -93,7 +86,7 @@ object SoundManager {
     )
 
     /**
-     * Starts the single unified audio streaming engine.
+     * Starts the audio engine on demand (e.g. to play SFX or when music is explicitly turned on).
      */
     @Synchronized
     fun startAudioEngine() {
@@ -135,19 +128,26 @@ object SoundManager {
 
                 val pcmChunk = ShortArray(CHUNK_SAMPLES)
                 val timeStep = 1.0 / SAMPLE_RATE
+                var idleFrames = 0
 
                 while (isActive && isEngineRunning) {
-                    if (!soundEnabled && !musicEnabled && activeSfxGenerators.isEmpty()) {
-                        // Conserve CPU when audio is muted and idle
-                        delay(50)
+                    // If music is off and no sound effects are actively playing
+                    if (!musicEnabled && activeSfxGenerators.isEmpty()) {
+                        idleFrames++
+                        if (idleFrames > 8) { // ~180ms of silence after last SFX
+                            break // Automatically shut down AudioTrack to save battery and guarantee zero background noise
+                        }
+                        delay(25)
                         continue
                     }
+
+                    idleFrames = 0
 
                     // Render one chunk of audio
                     for (i in 0 until CHUNK_SAMPLES) {
                         var mixedSample = 0.0
 
-                        // 1. Synthesize background music if enabled
+                        // 1. Synthesize gentle background music ONLY if explicitly enabled
                         if (musicEnabled) {
                             val currentNote = melodyNotes[musicNoteIndex % melodyNotes.size]
                             val freq = currentNote.first
@@ -162,10 +162,10 @@ object SoundManager {
 
                             val noteProgress = (musicBeatTime / noteDuration).coerceIn(0.0, 1.0)
                             val env = (1.0 - noteProgress * 0.6) * (1.0 - noteProgress * 0.6)
-                            val melodyWave = (sin(musicPhase) * 0.55 + sin(musicPhase * 2) * 0.15) * env
-                            val bassWave = sin(bassPhase) * 0.3 * (1.0 - (musicBeatTime % secondsPerBeat) / secondsPerBeat)
+                            val melodyWave = (sin(musicPhase) * 0.45 + sin(musicPhase * 2) * 0.1) * env
+                            val bassWave = sin(bassPhase) * 0.25 * (1.0 - (musicBeatTime % secondsPerBeat) / secondsPerBeat)
 
-                            mixedSample += (melodyWave + bassWave) * 8000.0
+                            mixedSample += (melodyWave + bassWave) * 3500.0
 
                             musicBeatTime += timeStep
                             if (musicBeatTime >= noteDuration) {
@@ -237,6 +237,9 @@ object SoundManager {
 
     fun stopMusic() {
         musicEnabled = false
+        if (activeSfxGenerators.isEmpty()) {
+            stopAudioEngine()
+        }
     }
 
     fun pause() {
@@ -247,13 +250,7 @@ object SoundManager {
 
     fun resume() {
         if (!isAppInForeground) return
-        try {
-            if (isEngineRunning && audioTrack?.playState != AudioTrack.PLAYSTATE_PLAYING) {
-                audioTrack?.play()
-            } else {
-                startAudioEngine()
-            }
-        } catch (_: Throwable) {
+        if (musicEnabled) {
             startAudioEngine()
         }
     }
@@ -262,57 +259,56 @@ object SoundManager {
 
     fun playSwap() {
         if (!soundEnabled) return
-        startAudioEngine()
         activeSfxGenerators.add(
             GlidingToneGenerator(startFreq = 350.0, endFreq = 550.0, duration = 0.08)
         )
+        startAudioEngine()
     }
 
     fun playInvalidSwap() {
         if (!soundEnabled) return
-        startAudioEngine()
         activeSfxGenerators.add(
             GlidingToneGenerator(startFreq = 150.0, endFreq = 90.0, duration = 0.12)
         )
+        startAudioEngine()
     }
 
     fun playMatch(comboLevel: Int = 1) {
         if (!soundEnabled) return
-        startAudioEngine()
         val freqs = listOf(523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51)
         val freq = freqs[(comboLevel - 1).coerceIn(0, freqs.size - 1)]
         activeSfxGenerators.add(
             BellToneGenerator(freq = freq, duration = 0.18)
         )
+        startAudioEngine()
     }
 
     fun playRocketBlast() {
         if (!soundEnabled) return
-        startAudioEngine()
         activeSfxGenerators.add(
             LaserWhooshGenerator(startFreq = 800.0, endFreq = 200.0, duration = 0.28)
         )
+        startAudioEngine()
     }
 
     fun playBombExplosion() {
         if (!soundEnabled) return
-        startAudioEngine()
         activeSfxGenerators.add(
             ExplosionGenerator(duration = 0.35)
         )
+        startAudioEngine()
     }
 
     fun playRainbowBlast() {
         if (!soundEnabled) return
-        startAudioEngine()
         activeSfxGenerators.add(
             SparkleArpeggioGenerator(duration = 0.45)
         )
+        startAudioEngine()
     }
 
     fun playComboFanfare(comboLevel: Int) {
         if (!soundEnabled) return
-        startAudioEngine()
         val baseFreq = when (comboLevel) {
             2 -> 659.25
             3 -> 783.99
@@ -322,15 +318,16 @@ object SoundManager {
         activeSfxGenerators.add(
             BellToneGenerator(freq = baseFreq, duration = 0.22)
         )
+        startAudioEngine()
     }
 
     fun playLevelWin() {
         if (!soundEnabled) return
-        startAudioEngine()
         scope.launch {
             val notes = listOf(523.25, 659.25, 783.99, 1046.50, 1318.51)
             for (freq in notes) {
                 activeSfxGenerators.add(BellToneGenerator(freq = freq, duration = 0.25))
+                startAudioEngine()
                 delay(120)
             }
         }
@@ -338,11 +335,11 @@ object SoundManager {
 
     fun playLevelFail() {
         if (!soundEnabled) return
-        startAudioEngine()
         scope.launch {
             val notes = listOf(440.0, 392.0, 349.23, 293.66)
             for (freq in notes) {
                 activeSfxGenerators.add(BellToneGenerator(freq = freq, duration = 0.22))
+                startAudioEngine()
                 delay(140)
             }
         }
@@ -350,18 +347,18 @@ object SoundManager {
 
     fun playButtonClick() {
         if (!soundEnabled) return
-        startAudioEngine()
         activeSfxGenerators.add(
             ClickGenerator(freq = 880.0, duration = 0.04)
         )
+        startAudioEngine()
     }
 
     fun playBooster() {
         if (!soundEnabled) return
-        startAudioEngine()
         activeSfxGenerators.add(
             GlidingToneGenerator(startFreq = 400.0, endFreq = 1200.0, duration = 0.25)
         )
+        startAudioEngine()
     }
 
     // --- Lightweight Procedural Wave Generators ---

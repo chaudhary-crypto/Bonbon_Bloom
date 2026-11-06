@@ -401,16 +401,20 @@ class UserRepository(private val userDao: UserDao) {
 
     suspend fun loginWithGoogle(email: String, displayName: String, photoUrl: String? = null) {
         val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        if (current.isLoggedIn && !current.email.isNullOrBlank()) {
+            AccountStorage.saveAccountProfile(current)
+        }
+
         val name = displayName.ifBlank { email.substringBefore("@") }
-        val updated = current.copy(
-            isLoggedIn = true,
-            authProvider = "GOOGLE",
-            username = name,
-            email = email,
-            avatarUrl = photoUrl,
-            lastCloudSyncTime = System.currentTimeMillis()
-        )
-        saveProfile(updated)
+        val loaded = AccountStorage.loadAccountProfile(email, name, "GOOGLE").let {
+            if (photoUrl != null) it.copy(avatarUrl = photoUrl) else it
+        }
+
+        if (!loaded.isAdmin) {
+            userDao.clearAllLevelProgress()
+        }
+
+        saveProfile(loaded)
         try {
             com.example.auth.CloudSyncManager.fetchFromCloud(this)
         } catch (e: Exception) {}
@@ -418,62 +422,55 @@ class UserRepository(private val userDao: UserDao) {
 
     suspend fun loginWithEmail(email: String, displayName: String? = null) {
         val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        if (current.isLoggedIn && !current.email.isNullOrBlank()) {
+            AccountStorage.saveAccountProfile(current)
+        }
+
         val name = displayName?.takeIf { it.isNotBlank() } ?: email.substringBefore("@")
-        val updated = current.copy(
-            isLoggedIn = true,
-            authProvider = "EMAIL",
-            username = name,
-            email = email,
-            lastCloudSyncTime = System.currentTimeMillis()
-        )
-        saveProfile(updated)
+        val loaded = AccountStorage.loadAccountProfile(email, name, "EMAIL")
+
+        if (!loaded.isAdmin) {
+            userDao.clearAllLevelProgress()
+        }
+
+        saveProfile(loaded)
     }
 
     suspend fun loginAsAdmin() {
         val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
-        val adminProfile = com.example.auth.AdminAuthManager.buildAdminProfile(current)
+        if (current.isLoggedIn && !current.email.isNullOrBlank()) {
+            AccountStorage.saveAccountProfile(current)
+        }
+        val adminProfile = com.example.auth.AdminAuthManager.buildAdminProfile(UserProfile())
+        AccountStorage.saveAccountProfile(adminProfile)
         saveProfile(adminProfile)
-    }
-
-    suspend fun loginWithPhone(phoneNumber: String) {
-        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
-        val maskedPhone = if (phoneNumber.length > 4) "User ***" + phoneNumber.takeLast(4) else "Player"
-        val updated = current.copy(
-            isLoggedIn = true,
-            authProvider = "PHONE",
-            username = maskedPhone,
-            email = "$phoneNumber@phone.login",
-            lastCloudSyncTime = System.currentTimeMillis()
-        )
-        saveProfile(updated)
-    }
-
-    suspend fun loginWithSocial(provider: String, displayName: String) {
-        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
-        val updated = current.copy(
-            isLoggedIn = true,
-            authProvider = provider,
-            username = displayName,
-            lastCloudSyncTime = System.currentTimeMillis()
-        )
-        saveProfile(updated)
     }
 
     suspend fun logout() {
         val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
-        val updated = current.copy(
-            isLoggedIn = false,
-            authProvider = "GUEST",
-            username = "Player",
-            email = null,
-            avatarUrl = null
-        )
-        saveProfile(updated)
+        if (current.isLoggedIn && !current.email.isNullOrBlank()) {
+            AccountStorage.saveAccountProfile(current)
+        }
+        userDao.clearAllLevelProgress()
+        val guest = AccountStorage.createGuestProfile()
+        saveProfile(guest)
     }
 
-    suspend fun deleteAccount() {
-        val fresh = UserProfile(id = 1, username = "Player")
+    suspend fun deleteAccount(): Result<Unit> {
+        val current = userDao.getUserProfile().firstOrNull() ?: UserProfile()
+        if (current.isLoggedIn && !current.email.isNullOrBlank()) {
+            val cloudResult = com.example.auth.CloudSyncManager.deleteFromCloud()
+            if (cloudResult.isFailure) {
+                // Do NOT silently continue or wipe local data if cloud deletion fails
+                val error = cloudResult.exceptionOrNull() ?: Exception("Cloud deletion failed. Please check network.")
+                return Result.failure(error)
+            }
+        }
+        AccountStorage.deleteAccount(current.email)
+        userDao.clearAllLevelProgress()
+        val fresh = AccountStorage.createGuestProfile()
         saveProfile(fresh)
+        return Result.success(Unit)
     }
 
     // --- Payment & Alternative Checkout Recording ---

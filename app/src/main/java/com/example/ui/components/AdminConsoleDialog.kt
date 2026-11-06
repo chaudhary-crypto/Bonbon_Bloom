@@ -34,6 +34,11 @@ fun AdminConsoleDialog(
     onSyncCloud: () -> Unit,
     onLogoutAdmin: () -> Unit
 ) {
+    if (!profile.isAdmin || !com.example.auth.AdminAuthManager.isOwnerOrAdmin(profile.email)) {
+        LaunchedEffect(Unit) { onDismiss() }
+        return
+    }
+
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Powers, 1: User Inspector, 2: Database & Security
     var targetLevelInput by remember { mutableStateOf(profile.highestUnlockedLevel.toString()) }
     var actionStatus by remember { mutableStateOf<String?>(null) }

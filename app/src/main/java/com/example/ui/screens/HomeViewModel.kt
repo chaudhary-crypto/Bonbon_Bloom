@@ -174,17 +174,7 @@ class HomeViewModel(private val repository: UserRepository) : ViewModel() {
         }
     }
 
-    fun loginWithPhone(phoneNumber: String) {
-        viewModelScope.launch {
-            repository.loginWithPhone(phoneNumber)
-        }
-    }
 
-    fun loginWithSocial(provider: String, name: String) {
-        viewModelScope.launch {
-            repository.loginWithSocial(provider, name)
-        }
-    }
 
     fun logout() {
         viewModelScope.launch {
@@ -192,9 +182,15 @@ class HomeViewModel(private val repository: UserRepository) : ViewModel() {
         }
     }
 
-    fun deleteAccount() {
+    fun deleteAccount(onResult: ((success: Boolean, errorMsg: String?) -> Unit)? = null) {
         viewModelScope.launch {
-            repository.deleteAccount()
+            val result = repository.deleteAccount()
+            if (result.isSuccess) {
+                onResult?.invoke(true, null)
+            } else {
+                val error = result.exceptionOrNull()?.message ?: "Failed to delete cloud account data."
+                onResult?.invoke(false, error)
+            }
         }
     }
 

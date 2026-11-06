@@ -81,6 +81,37 @@ class BonbonBloomTest {
     }
 
     @Test
+    fun testPlayabilityAcrossAll1000Levels() {
+        val engine = GameEngine()
+        for (lvl in 1..1000) {
+            val config = LevelCatalog.getLevel(lvl)
+            assertEquals("Level $lvl config id must match", lvl, config.id)
+            assertTrue("Level $lvl must have valid target", config.targetScore > 0)
+            assertTrue("Level $lvl must have at least 15 moves", config.maxMoves >= 15)
+
+            // Verify no jelly is ever placed under chocolate blockers
+            val chocPositions = config.initialChocolatePositions.toSet()
+            for (jellyPos in config.initialJellyPositions) {
+                assertFalse("Level $lvl cannot have jelly under chocolate at $jellyPos", chocPositions.contains(jellyPos))
+            }
+
+            // Load and verify initial board has valid structure
+            engine.loadLevel(lvl)
+            val board = engine.board.value
+            assertEquals(10, board.size)
+            assertEquals(8, board[0].size)
+
+            // Verify obstacles
+            for (pos in config.initialChocolatePositions) {
+                assertEquals("Level $lvl chocolate at $pos", ObstacleType.Chocolate, board[pos.row][pos.col].obstacle)
+            }
+            for (pos in config.initialIcePositions) {
+                assertEquals("Level $lvl ice at $pos", ObstacleType.Ice, board[pos.row][pos.col].obstacle)
+            }
+        }
+    }
+
+    @Test
     fun testBoardGenerationAcrossMilestoneLevels() {
         val testLevels = listOf(1, 10, 50, 100, 250, 500, 750, 1000)
         val engine = GameEngine()
@@ -263,5 +294,132 @@ class BonbonBloomTest {
         assertTrue(admin.hasRemovedAds)
         assertFalse(admin.isCheatingDetected)
         assertTrue("Admin profile should have valid anti-cheat signature", AntiCheatManager.verifySignature(admin))
+    }
+
+    @Test
+    fun testOwnerAdminStrictCheck() {
+        // Only bhatiaomtesh02@gmail.com and omtesh are owner/admins
+        assertTrue(com.example.auth.AdminAuthManager.isOwnerOrAdmin("bhatiaomtesh02@gmail.com"))
+        assertTrue(com.example.auth.AdminAuthManager.isOwnerOrAdmin("BHATIAOMTESH02@GMAIL.COM"))
+        assertTrue(com.example.auth.AdminAuthManager.isOwnerOrAdmin("  bhatiaomtesh02@gmail.com  "))
+        assertTrue(com.example.auth.AdminAuthManager.isOwnerOrAdmin("omtesh"))
+        assertTrue(com.example.auth.AdminAuthManager.isOwnerOrAdmin("OMTESH"))
+
+        // Any other email or user MUST NOT be treated as owner/admin
+        assertFalse(com.example.auth.AdminAuthManager.isOwnerOrAdmin("bhatiaomtesh@gmail.com"))
+        assertFalse(com.example.auth.AdminAuthManager.isOwnerOrAdmin("bhatiaomtesh01@gmail.com"))
+        assertFalse(com.example.auth.AdminAuthManager.isOwnerOrAdmin("bhatiaomtesh02@gmail.com.evil.com"))
+        assertFalse(com.example.auth.AdminAuthManager.isOwnerOrAdmin("user123@gmail.com"))
+        assertFalse(com.example.auth.AdminAuthManager.isOwnerOrAdmin("player@domain.org"))
+        assertFalse(com.example.auth.AdminAuthManager.isOwnerOrAdmin(null))
+        assertFalse(com.example.auth.AdminAuthManager.isOwnerOrAdmin(""))
+    }
+
+    @Test
+    fun testAccountStorageDataIsolation() {
+        // Test normal user profile creation
+        val normalProfile = com.example.data.AccountStorage.loadAccountProfile(
+            email = "normal_user@gmail.com",
+            displayName = "Normal User",
+            authProvider = "GOOGLE"
+        )
+        assertFalse("Normal user must NEVER have admin privileges", normalProfile.isAdmin)
+        assertEquals("Normal user starts at level 1", 1, normalProfile.highestUnlockedLevel)
+        assertEquals("Normal user starting coins", 500, normalProfile.coins)
+        assertEquals("Normal user starting diamonds", 25, normalProfile.diamonds)
+
+        // Simulate normal user earning coins and leveling up
+        val progressedNormal = normalProfile.copy(
+            coins = 1200,
+            highestUnlockedLevel = 5,
+            diamonds = 40
+        )
+        com.example.data.AccountStorage.saveAccountProfile(progressedNormal)
+
+        // Test owner account profile creation
+        val ownerProfile = com.example.data.AccountStorage.loadAccountProfile(
+            email = "bhatiaomtesh02@gmail.com",
+            displayName = "Omtesh",
+            authProvider = "GOOGLE"
+        )
+        assertTrue("Owner must have admin privileges", ownerProfile.isAdmin)
+        assertEquals("Owner gets 1000 levels", 1000, ownerProfile.highestUnlockedLevel)
+        assertEquals("Owner gets 99999 coins", 99999, ownerProfile.coins)
+
+        // Reload normal user - must retain its OWN progress and NEVER inherit admin data
+        val reloadedNormal = com.example.data.AccountStorage.loadAccountProfile(
+            email = "normal_user@gmail.com",
+            displayName = "Normal User",
+            authProvider = "GOOGLE"
+        )
+        assertFalse("Reloaded normal user must NOT be admin", reloadedNormal.isAdmin)
+        assertEquals("Normal user keeps level 5 progress", 5, reloadedNormal.highestUnlockedLevel)
+        assertEquals("Normal user keeps 1200 coins", 1200, reloadedNormal.coins)
+        assertEquals("Normal user keeps 40 diamonds", 40, reloadedNormal.diamonds)
+
+        // Guest profile test
+        val guest = com.example.data.AccountStorage.createGuestProfile()
+        assertFalse(guest.isAdmin)
+        assertFalse(guest.isLoggedIn)
+        assertEquals(1, guest.highestUnlockedLevel)
+        assertEquals(500, guest.coins)
+    }
+
+    @Test
+    fun testRobustAdjacentMatchingLogic() {
+        val engine = GameEngine()
+
+        // 1. Verify adjacency logic
+        val pCenter = GridPosition(3, 3)
+        val pRight = GridPosition(3, 4)
+        val pLeft = GridPosition(3, 2)
+        val pUp = GridPosition(2, 3)
+        val pDown = GridPosition(4, 3)
+        val pDiagonal = GridPosition(4, 4)
+        val pDistant = GridPosition(3, 6)
+
+        fun isAdjacent(a: GridPosition, b: GridPosition): Boolean {
+            val rd = kotlin.math.abs(a.row - b.row)
+            val cd = kotlin.math.abs(a.col - b.col)
+            return (rd == 1 && cd == 0) || (rd == 0 && cd == 1)
+        }
+
+        assertTrue("Right is adjacent", isAdjacent(pCenter, pRight))
+        assertTrue("Left is adjacent", isAdjacent(pCenter, pLeft))
+        assertTrue("Up is adjacent", isAdjacent(pCenter, pUp))
+        assertTrue("Down is adjacent", isAdjacent(pCenter, pDown))
+        assertFalse("Diagonal is NOT adjacent", isAdjacent(pCenter, pDiagonal))
+        assertFalse("Distant is NOT adjacent", isAdjacent(pCenter, pDistant))
+
+        // 2. Test horizontal 3-in-a-row match group detection
+        val rowCells = List(8) { r ->
+            List(8) { c ->
+                val type = if (r == 0 && c in 2..4) CandyType.Strawberry else CandyType.Mint
+                com.example.game.Cell(
+                    position = GridPosition(r, c),
+                    candy = Candy(id = r * 8 + c + 1, type = type)
+                )
+            }
+        }
+        val matchGroups = engine.findMatchGroups(rowCells)
+        assertTrue("Should detect match group", matchGroups.isNotEmpty())
+        val strawberryMatch = matchGroups.firstOrNull { it.candyType == CandyType.Strawberry }
+        assertNotNull("Strawberry match group must exist", strawberryMatch)
+        assertEquals(3, strawberryMatch?.positions?.size)
+        assertTrue(strawberryMatch?.positions?.contains(GridPosition(0, 2)) == true)
+        assertTrue(strawberryMatch?.positions?.contains(GridPosition(0, 3)) == true)
+        assertTrue(strawberryMatch?.positions?.contains(GridPosition(0, 4)) == true)
+
+        // 3. Verify clearingPositions state flow exists and starts empty
+        assertTrue(engine.clearingPositions.value.isEmpty())
+    }
+
+    @Test
+    fun testAdMobAndPrivacyPolicyCompliance() {
+        assertTrue("Banner ad unit ID must be configured", com.example.BuildConfig.ADMOB_BANNER_ID.isNotEmpty())
+        assertTrue("Interstitial ad unit ID must be configured", com.example.BuildConfig.ADMOB_INTERSTITIAL_ID.isNotEmpty())
+        assertTrue("Rewarded ad unit ID must be configured", com.example.BuildConfig.ADMOB_REWARDED_ID.isNotEmpty())
+        assertTrue("Privacy policy URL must be configured", com.example.BuildConfig.PRIVACY_POLICY_URL.isNotEmpty())
+        assertTrue("Terms of service URL must be configured", com.example.BuildConfig.TERMS_URL.isNotEmpty())
     }
 }

@@ -5,12 +5,12 @@
     <string name="music">Musik</string>
     <string name="haptics">Haptisches Feedback</string>
     <string name="language">Sprache</string>
-    <string name="privacy_policy_title">Datenschutzerklärung</string>
-    <string name="terms_of_service_title">Nutzungsbedingungen</string>
-    <string name="restore_purchases">Käufe wiederherstellen</string>
-    <string name="delete_my_data">Meine Daten löschen</string>
-    <string name="privacy_options">Datenschutzoptionen</string>
-    <string name="vip_subscription_terms">Abonnement mit automatischer Verlängerung. Die Zahlung wird bei Bestätigung über das Google Play-Konto abgerechnet. Das Abonnement verlängert sich automatisch, sofern es nicht mindestens 24 Stunden vor Ablauf des aktuellen Zeitraums gekündigt wird. Jederzeit kündbar im Google Play Store > Abonnements.</string>
+    <string name="bonbon_privacy_policy_title">Datenschutzerklärung</string>
+    <string name="bonbon_terms_of_service_title">Nutzungsbedingungen</string>
+    <string name="bonbon_restore_purchases">Käufe wiederherstellen</string>
+    <string name="bonbon_delete_my_data">Meine Daten löschen</string>
+    <string name="bonbon_privacy_options">Datenschutzoptionen</string>
+    <string name="bonbon_vip_subscription_terms">Abonnement mit automatischer Verlängerung. Die Zahlung wird bei Bestätigung über das Google Play-Konto abgerechnet. Das Abonnement verlängert sich automatisch, sofern es nicht mindestens 24 Stunden vor Ablauf des aktuellen Zeitraums gekündigt wird. Jederzeit kündbar im Google Play Store > Abonnements.</string>
 
     <string name="level_title">Level %1$d</string>
     <string name="moves_left">Züge: %1$d</string>

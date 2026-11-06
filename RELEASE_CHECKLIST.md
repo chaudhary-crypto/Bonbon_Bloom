@@ -1,68 +1,66 @@
-# Bonbon Bloom — Google Play Console Release Checklist
+# Bonbon Bloom — Master Multi-Store Release Checklist
 
-Follow this step-by-step checklist to ensure a seamless Google Play Store submission and review approval.
-
----
-
-### Phase 1: Google Play Console Account & Identity
-- [ ] Create or log in to your verified **Google Play Developer Account**.
-- [ ] Ensure D-U-N-S verification (for organizations) or identity verification (for individuals) is complete.
-- [ ] Set up Merchant Account in Play Console for in-app purchases and subscriptions.
+**Application Title:** Bonbon Bloom  
+**Package Identifier:** `com.bonbonbloom.game`  
+**Target Release Version:** `12.11.16` (Version Code: `121116`)  
+**Target Stores:** Google Play Store, Samsung Galaxy Store, Amazon Appstore, Huawei AppGallery, Uptodown  
 
 ---
 
-### Phase 2: Store Presence & Metadata Setup
-- [ ] **App Title:** `Bonbon Bloom` (12 / 30 characters).
-- [ ] **Short Description:** `Match delicious bonbons, blast juicy bloom combos & explore 1,000 sweet worlds!` (78 / 80 characters).
-- [ ] **Full Description:** Copy from `STORE_LISTING.md`.
-- [ ] **Hi-res Icon:** 512 x 512 px PNG (32-bit color with alpha, up to 1024KB).
-- [ ] **Feature Graphic:** 1024 x 500 px JPEG or PNG.
-- [ ] **Screenshots:** Minimum 4 screenshots (portrait phone 1080x1920 or 1080x2400) showcasing gameplay, world map, combos, and store.
+## Phase 1: Pre-Release Verification & Codebase Checks
+- [x] **SDK Targets:** `compileSdk 36`, `targetSdk 36`, `minSdk 24`.
+- [x] **Gradle Wrapper:** Restored and pinned to official Gradle 8.11.1 distribution.
+- [x] **AdMob Security:** Rewarded ads strictly award on server callback (`ad.show { reward -> ... }`). No fallback awards on load failures.
+- [x] **Frequency Capping:** Interstitial cooldown of $\ge 120$ seconds, no ads on levels 1–10, never during active cascades.
+- [x] **In-App Billing:** Google Play Billing 7.x initialized with duplicate token rejection (`processedPurchaseTokens`).
+- [x] **Zero-Trust Firestore:** Rules configured in `firestore.rules` preventing unauthorized writes, bounds overflow, and privilege escalation.
+- [x] **Account Deletion:** Dual-channel deletion supported:
+  - In-App: Settings ➡️ Delete My Account (purges Firestore, Firebase Auth, Room).
+  - Web: Public deletion page available at `/delete-account.html`.
+- [x] **Unit Testing:** Automated JVM unit test suite passed without regressions.
+- [x] **CI/CD:** Automated GitHub Actions build pipeline configured at `.github/workflows/android-build-release.yml`.
 
 ---
 
-### Phase 3: Content Rating & Policy Compliance
-- [ ] Complete the **IARC Content Rating Questionnaire** using answers in `CONTENT_RATING_ANSWERS.md` (Target: Everyone / PEGI 3).
-- [ ] **Target Audience:** Select **13 and older** (General Audience). Do NOT declare "Children" to avoid COPPA / Families Policy friction.
-- [ ] **Privacy Policy URL:** Host `PRIVACY_POLICY.md` on your domain or GitHub Pages and provide the live link in Play Console (`https://yourdomain.com/privacy`).
-- [ ] Complete the **Data Safety Form** using the exact guidelines in `PRIVACY_AND_DATA_SAFETY.md`.
-- [ ] Complete **Financial Features & Ads Declaration:**
-  - Select "Contains Ads" = **Yes**.
-  - No real-money gambling or real prizes.
+## Phase 2: Google Play Store Release
+- [ ] Log in to Google Play Console.
+- [ ] Select **Release ➡️ Production** (or Closed Testing).
+- [ ] Upload Android App Bundle: `app/build/outputs/bundle/release/app-release.aab`.
+- [ ] **Data Safety Form:**
+  - Data Collected: User ID (Firebase UID/email for cloud saves), Advertising ID (AdMob for ad delivery).
+  - All data encrypted in transit (TLS 1.3).
+  - Account deletion URL: `https://<your-domain>/delete-account.html`.
+- [ ] **IARC Content Rating:** Questionnaire completed as Casual/Puzzle Match-3. Rated PEGI 3 / ESRB Everyone.
+- [ ] **Target Audience:** General Audience (13+).
+- [ ] **In-App Products Live:** Verify `coins_500`, `coins_1500`, `coins_5000`, `gems_50`, `gems_200`, `gems_600`, `remove_ads`, and `vip_monthly` are active.
 
 ---
 
-### Phase 4: In-App Products & Subscriptions Setup
-- [ ] Create the following Managed In-App Products in Play Console:
-  - `remove_ads` (Non-consumable, e.g. $2.99)
-  - `coins_500` (Consumable, $0.99)
-  - `coins_1500` (Consumable, $2.49)
-  - `coins_5000` (Consumable, $6.99)
-  - `gems_50` (Consumable, $1.99)
-  - `gems_200` (Consumable, $4.99)
-  - `gems_600` (Consumable, $9.99)
-  - `booster_starter_pack` (Consumable, $1.99)
-- [ ] Create the Subscription Product:
-  - Product ID: `vip_monthly`
-  - Base Plan: Auto-renewing monthly ($7.99/mo) or weekly ($2.99/wk)
-  - Cancellation Policy: Handled automatically by Google Play Subscriptions
+## Phase 3: Google AdMob Approval & Linking
+- [ ] Ensure `app-ads.txt` is accessible at the root of your developer domain (e.g. `https://yourdomain.com/app-ads.txt`).
+- [ ] In Google AdMob Console, link app to the live Google Play listing.
+- [ ] Enable Google User Messaging Platform (UMP) GDPR consent message for EEA/UK users.
+- [ ] Replace test ad-unit placeholders with live production AdMob unit IDs in production build environment.
 
 ---
 
-### Phase 5: AdMob & UMP Setup
-- [ ] Register `com.bonbonbloom.game` in your Google AdMob Console.
-- [ ] Create App ID and Ad Units:
-  - Adaptive Banner Unit
-  - Interstitial Ad Unit
-  - Rewarded Video Unit
-- [ ] Configure European Regulations (GDPR) message in AdMob Privacy & Messaging (UMP).
-- [ ] Link your AdMob app to your Google Play Console app once live.
+## Phase 4: Samsung Galaxy Store
+- [ ] Log in to Samsung Developer Seller Portal.
+- [ ] Upload universal release APK: `app-release.apk` (or `BonbonBloom.apk`).
+- [ ] Set Category: Games ➡️ Puzzle.
+- [ ] Attach promotional banners and 1080x1920 screenshots.
 
 ---
 
-### Phase 6: Build & Signing
-- [ ] Generate your production release Keystore and store backup securely.
-- [ ] Build release Android App Bundle:
-  `gradle :app:bundleRelease`
-- [ ] Test release build locally on a physical device.
-- [ ] Upload `.aab` to Closed Testing Track first.
+## Phase 5: Amazon Appstore
+- [ ] Log in to Amazon Developer Console.
+- [ ] Add new Android app with package `com.bonbonbloom.game`.
+- [ ] Upload `app-release.apk`.
+- [ ] Select Non-GMS compatibility flag (graceful fallback verified).
+
+---
+
+## Phase 6: Huawei AppGallery & Uptodown
+- [ ] Upload `app-release.apk` to Huawei AppGallery Connect.
+- [ ] Submit `BonbonBloom.apk` to Uptodown Developer Zone.
+- [ ] Publish direct download landing page (`public/index.html`).

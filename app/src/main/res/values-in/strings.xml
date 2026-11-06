@@ -5,12 +5,12 @@
     <string name="music">Musik</string>
     <string name="haptics">Getaran Haptik</string>
     <string name="language">Bahasa</string>
-    <string name="privacy_policy_title">Kebijakan Privasi</string>
-    <string name="terms_of_service_title">Ketentuan Layanan</string>
-    <string name="restore_purchases">Pulihkan Pembelian</string>
-    <string name="delete_my_data">Hapus Data Saya</string>
-    <string name="privacy_options">Opsi Privasi</string>
-    <string name="vip_subscription_terms">Langganan yang diperpanjang otomatis. Pembayaran dibebankan ke akun Google Play saat konfirmasi. Langganan diperpanjang otomatis kecuali dibatalkan setidaknya 24 jam sebelum akhir periode berjalan. Kelola atau batalkan kapan saja di Google Play Store > Langganan.</string>
+    <string name="bonbon_privacy_policy_title">Kebijakan Privasi</string>
+    <string name="bonbon_terms_of_service_title">Ketentuan Layanan</string>
+    <string name="bonbon_restore_purchases">Pulihkan Pembelian</string>
+    <string name="bonbon_delete_my_data">Hapus Data Saya</string>
+    <string name="bonbon_privacy_options">Opsi Privasi</string>
+    <string name="bonbon_vip_subscription_terms">Langganan yang diperpanjang otomatis. Pembayaran dibebankan ke akun Google Play saat konfirmasi. Langganan diperpanjang otomatis kecuali dibatalkan setidaknya 24 jam sebelum akhir periode berjalan. Kelola atau batalkan kapan saja di Google Play Store > Langganan.</string>
 
     <string name="level_title">Level %1$d</string>
     <string name="moves_left">Langkah: %1$d</string>

@@ -1,0 +1,17 @@
+# ==============================================================================
+# Google AdMob Authorized Digital Sellers (app-ads.txt) for Bonbon Bloom
+# Developer Domain: https://www.earnvero.app
+# Live ads.txt URL: https://www.earnvero.app/ads.txt
+# ==============================================================================
+# The live earnvero.app domain currently serves:
+# google.com, pub-9950623744691218, DIRECT, f08c47fec0942fa0
+#
+# If your approved AdMob account shares publisher ID pub-9950623744691218,
+# then https://www.earnvero.app/ads.txt is already 100% active and verified.
+#
+# If your AdMob account has a separate publisher ID (from admob.google.com >
+# Settings > Account Information > Publisher ID), add this line to your website's
+# public ads.txt file:
+# google.com, pub-YOUR_ACTUAL_ADMOB_PUB_ID, DIRECT, f08c47fec0942fa0
+# ==============================================================================
+google.com, pub-9950623744691218, DIRECT, f08c47fec0942fa0

@@ -42,8 +42,8 @@ fun BannerAdView(
     val isInEditMode = LocalInspectionMode.current
     val hasRemovedAds by PlayBillingManager.hasRemovedAds.collectAsState()
 
-    // If player purchased Remove Ads, do not display or load banners
-    if (hasRemovedAds) {
+    // If player purchased Remove Ads or UMP consent forbids ads, do not display or load banners
+    if (hasRemovedAds || !ConsentManager.canRequestAds) {
         Box(modifier = Modifier.size(0.dp))
         return
     }
@@ -90,6 +90,9 @@ fun BannerAdView(
                     adViewRef = view
                     view.setAdSize(AdSize.BANNER)
                     view.adUnitId = adUnitId
+                    view.setOnPaidEventListener { adValue ->
+                        AdManager.logAdImpressionRevenue(ctx, adValue, "banner", adUnitId)
+                    }
                     view.adListener = object : AdListener() {
                         override fun onAdLoaded() {
                             isAdLoaded = true
@@ -97,8 +100,16 @@ fun BannerAdView(
                         }
 
                         override fun onAdFailedToLoad(error: LoadAdError) {
+                            Log.w("BannerAdView", "Banner ad failed to load [${error.code}]: ${error.message}")
                             isAdLoaded = false
                             adLoadFailed = true
+                            view.postDelayed({
+                                try {
+                                    if (!isAdLoaded && ConsentManager.canRequestAds && !PlayBillingManager.hasRemovedAds.value) {
+                                        view.loadAd(AdRequest.Builder().build())
+                                    }
+                                } catch (_: Throwable) {}
+                            }, 15000L)
                         }
                     }
                     view.loadAd(AdRequest.Builder().build())

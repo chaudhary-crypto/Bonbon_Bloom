@@ -28,4 +28,7 @@ interface UserDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveLevelProgress(progress: LevelProgress)
+
+    @Query("DELETE FROM level_progress")
+    suspend fun clearAllLevelProgress()
 }

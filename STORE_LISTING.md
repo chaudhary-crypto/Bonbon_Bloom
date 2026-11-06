@@ -85,3 +85,12 @@ Download **Bonbon Bloom** today and start blooming your way to puzzle mastery!
    *Caption: "FILL & BREAK YOUR PIGGY BANK!"*
 8. **Screenshot 8:** Level Complete screen with 3 gold stars and Sugar Rush:  
    *Caption: "SUGAR RUSH BONUS & 3-STAR GLORY!"*
+
+---
+
+### Store Contact & Policy Disclosures
+* **Developer / Support Email:** `support@earnvero.app`
+* **Privacy Policy URL:** `https://bhatiaomtesh02.github.io/bonbon-bloom/privacy-policy.html`
+* **Account Deletion URL:** `https://bhatiaomtesh02.github.io/bonbon-bloom/delete-account.html`
+* **Target Audience:** Age 13 and older (PEGI 3 / ESRB Everyone)
+* **Category:** Puzzle / Match-3

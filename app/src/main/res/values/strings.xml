@@ -1,15 +1,9 @@
 <resources>
     <string name="app_name">Bonbon Bloom</string>
 
-    <!-- Default fallback identifiers for Firebase services when running in standalone mode -->
-    <string name="google_app_id" translatable="false">1:657577014676:android:ab354175b4a1417f</string>
-    <string name="gcm_defaultSenderId" translatable="false">657577014676</string>
-    <string name="default_web_client_id" translatable="false">657577014676-offline.apps.googleusercontent.com</string>
-    <string name="firebase_database_url" translatable="false">https://bonbon-bloom-offline.firebaseio.com</string>
-    <string name="google_api_key" translatable="false">AIzaSyDummyKeyForBonbonBloomOfflineBuild0</string>
-    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyDummyKeyForBonbonBloomOfflineBuild0</string>
-    <string name="project_id" translatable="false">bonbon-bloom-standalone</string>
-    <string name="google_storage_bucket" translatable="false">bonbon-bloom-standalone.appspot.com</string>
+    <!-- Production Web Client ID for Credential Manager -->
+    <string name="default_web_client_id" translatable="false">6041659106-0g9ueo8m2auke1vege4pdnlfenupbb53.apps.googleusercontent.com</string>
+
 
     <!-- General Compliance & Settings Strings -->
     <string name="settings_title">Settings</string>
@@ -17,12 +11,12 @@
     <string name="music">Music</string>
     <string name="haptics">Haptic Vibration</string>
     <string name="language">Language</string>
-    <string name="privacy_policy_title">Privacy Policy</string>
-    <string name="terms_of_service_title">Terms of Service</string>
-    <string name="restore_purchases">Restore Purchases</string>
-    <string name="delete_my_data">Delete My Data</string>
-    <string name="privacy_options">Privacy Options</string>
-    <string name="vip_subscription_terms">Auto-renewing subscription. Payment charged to Google Play account at confirmation. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in Google Play Store > Subscriptions.</string>
+    <string name="bonbon_privacy_policy_title">Privacy Policy</string>
+    <string name="bonbon_terms_of_service_title">Terms of Service</string>
+    <string name="bonbon_restore_purchases">Restore Purchases</string>
+    <string name="bonbon_delete_my_data">Delete My Data</string>
+    <string name="bonbon_privacy_options">Privacy Options</string>
+    <string name="bonbon_vip_subscription_terms">Auto-renewing subscription. Payment charged to Google Play account at confirmation. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in Google Play Store > Subscriptions.</string>
 
     <!-- Gameplay & Objectives -->
     <string name="level_title">Level %1$d</string>

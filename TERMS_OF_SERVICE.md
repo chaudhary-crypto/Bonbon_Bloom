@@ -49,4 +49,4 @@ We reserve the right to modify these Terms of Service at any time. Any changes w
 
 ### 8. Contact Information
 If you have questions about these Terms of Service, please contact us at:
-**Support Email:** support@bonbonbloom.game
+**Support Email:** support@earnvero.app

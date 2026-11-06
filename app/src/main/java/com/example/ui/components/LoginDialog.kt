@@ -47,8 +47,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.audio.SoundManager
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @Composable
 fun LoginDialog(
@@ -198,24 +200,33 @@ fun LoginDialog(
                                             isLoading = true
                                             loadingMessage = "Connecting with Google..."
                                             coroutineScope.launch {
-                                                val firebaseUser = com.example.auth.GoogleAuthManager.signInWithGoogle(context)
-                                                if (firebaseUser != null) {
-                                                    val googleEmail = firebaseUser.email ?: currentEmail ?: "player@bonbonbloom.game"
-                                                    val displayName = firebaseUser.displayName ?: "Player"
-                                                    onLoginWithGoogle(googleEmail, displayName)
-                                                    SoundManager.playLevelWin()
-                                                    onDismiss()
+                                                val result = com.example.auth.GoogleAuthManager.signInWithGoogle(context)
+                                                if (result.isSuccess) {
+                                                    val firebaseUser = result.getOrNull()
+                                                    if (firebaseUser != null) {
+                                                        val googleEmail = firebaseUser.email ?: ""
+                                                        val displayName = firebaseUser.displayName ?: googleEmail.substringBefore("@")
+                                                        onLoginWithGoogle(googleEmail, displayName)
+                                                        SoundManager.playLevelWin()
+                                                        onDismiss()
+                                                    }
                                                 } else {
-                                                    delay(600)
-                                                    val googleEmail = currentEmail ?: "bhatiaomtesh02@gmail.com"
-                                                    val displayName = "Omtesh Bhatia"
-                                                    onLoginWithGoogle(googleEmail, displayName)
-                                                    SoundManager.playLevelWin()
-                                                    onDismiss()
+                                                    val ex = result.exceptionOrNull()
+                                                    val errorMsg = when (ex) {
+                                                        is androidx.credentials.exceptions.GetCredentialCancellationException ->
+                                                            "Google Sign-In was cancelled."
+                                                        is androidx.credentials.exceptions.NoCredentialException ->
+                                                            "No Google account found on device. Please sign in with Email below or add an account in device Settings."
+                                                        else ->
+                                                            "Google Sign-In was unavailable (${ex?.localizedMessage ?: "check connection"}). Please use Email below."
+                                                    }
+                                                    emailErrorMessage = errorMsg
+                                                    selectedTab = 1
                                                 }
                                                 isLoading = false
                                             }
                                         }
+
                                 ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -346,11 +357,34 @@ fun LoginDialog(
                                         isLoading = true
                                         loadingMessage = if (isSignUpMode) "Creating account..." else "Signing in..."
                                         coroutineScope.launch {
-                                            delay(600)
-                                            onLoginWithEmail(trimmedEmail, nameInput.trim())
-                                            SoundManager.playLevelWin()
-                                            isLoading = false
-                                            onDismiss()
+                                            try {
+                                                val auth = FirebaseAuth.getInstance()
+                                                val authResult = if (isSignUpMode) {
+                                                    auth.createUserWithEmailAndPassword(trimmedEmail, passwordInput).await()
+                                                } else {
+                                                    auth.signInWithEmailAndPassword(trimmedEmail, passwordInput).await()
+                                                }
+                                                val user = authResult.user
+                                                val finalName = if (nameInput.isNotBlank()) nameInput.trim() else (user?.displayName ?: trimmedEmail.substringBefore("@"))
+                                                onLoginWithEmail(trimmedEmail, finalName)
+                                                SoundManager.playLevelWin()
+                                                isLoading = false
+                                                onDismiss()
+                                            } catch (e: Exception) {
+                                                isLoading = false
+                                                emailErrorMessage = when {
+                                                    e.message?.contains("password", ignoreCase = true) == true ->
+                                                        "Incorrect password or password too weak (min 6 characters)."
+                                                    e.message?.contains("already in use", ignoreCase = true) == true ->
+                                                        "This email is already registered. Please tap 'Already have an account? Sign In'."
+                                                    e.message?.contains("no user record", ignoreCase = true) == true || e.message?.contains("user-not-found", ignoreCase = true) == true ->
+                                                        "No account found with this email. Tap 'Create an account' below."
+                                                    e.message?.contains("network", ignoreCase = true) == true ->
+                                                        "Network connection error. Please check your internet connection."
+                                                    else ->
+                                                        e.localizedMessage ?: "Authentication failed. Please check credentials."
+                                                }
+                                            }
                                         }
                                     },
                                     shape = RoundedCornerShape(22.dp),
