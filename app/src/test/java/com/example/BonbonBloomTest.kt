@@ -244,13 +244,18 @@ class BonbonBloomTest {
 
     @Test
     fun testPlayBillingProductsConfig() {
-        assertEquals("remove_ads", PlayBillingManager.PRODUCT_REMOVE_ADS)
+        assertEquals("vip_weekly", PlayBillingManager.PRODUCT_VIP_WEEKLY)
         assertEquals("vip_monthly", PlayBillingManager.PRODUCT_VIP_MONTHLY)
+        assertEquals("remove_ads", PlayBillingManager.PRODUCT_REMOVE_ADS)
         assertEquals("coins_500", PlayBillingManager.PRODUCT_COINS_500)
         assertEquals("coins_1500", PlayBillingManager.PRODUCT_COINS_1500)
         assertEquals("coins_5000", PlayBillingManager.PRODUCT_COINS_5000)
         assertEquals("gems_50", PlayBillingManager.PRODUCT_GEMS_50)
+        assertEquals("gems_150", PlayBillingManager.PRODUCT_GEMS_150)
         assertEquals("gems_200", PlayBillingManager.PRODUCT_GEMS_200)
+        assertEquals("gems_500", PlayBillingManager.PRODUCT_GEMS_500)
+        assertEquals("gems_600", PlayBillingManager.PRODUCT_GEMS_600)
+        assertEquals("gems_1500", PlayBillingManager.PRODUCT_GEMS_1500)
         assertEquals("booster_starter_pack", PlayBillingManager.PRODUCT_STARTER_PACK)
     }
 
@@ -262,18 +267,10 @@ class BonbonBloomTest {
         assertTrue(com.example.auth.AdminAuthManager.isAdminIdentifier("omtesh@bonbonbloom.game"))
         assertFalse(com.example.auth.AdminAuthManager.isAdminIdentifier("regular_player"))
 
-        // Password verification using salted cryptographic digest
-        assertTrue(
-            "Admin secret credentials should verify successfully",
-            com.example.auth.AdminAuthManager.verifyCredentials("omtesh", "@Omtesh.9478735801")
-        )
+        // Unauthenticated runtime must never grant Firebase owner privileges
         assertFalse(
-            "Wrong password must be rejected",
-            com.example.auth.AdminAuthManager.verifyCredentials("omtesh", "wrong_password_123")
-        )
-        assertFalse(
-            "Non-admin identifier with same password must be rejected",
-            com.example.auth.AdminAuthManager.verifyCredentials("player_one", "@Omtesh.9478735801")
+            "Owner session must be false when no Firebase Auth user is signed in",
+            com.example.auth.AdminAuthManager.isVerifiedFirebaseOwnerSession()
         )
 
         // Master privileges verification

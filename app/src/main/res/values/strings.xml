@@ -1,10 +1,6 @@
 <resources>
     <string name="app_name">Bonbon Bloom</string>
 
-    <!-- Production Web Client ID for Credential Manager -->
-    <string name="default_web_client_id" translatable="false">6041659106-0g9ueo8m2auke1vege4pdnlfenupbb53.apps.googleusercontent.com</string>
-
-
     <!-- General Compliance & Settings Strings -->
     <string name="settings_title">Settings</string>
     <string name="sound_effects">Sound Effects</string>
@@ -16,7 +12,10 @@
     <string name="bonbon_restore_purchases">Restore Purchases</string>
     <string name="bonbon_delete_my_data">Delete My Data</string>
     <string name="bonbon_privacy_options">Privacy Options</string>
-    <string name="bonbon_vip_subscription_terms">Auto-renewing subscription. Payment charged to Google Play account at confirmation. Subscription automatically renews unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in Google Play Store > Subscriptions.</string>
+    <string name="bonbon_support_email" translatable="false">support@earnvero.app</string>
+    <string name="bonbon_vip_subscription_terms">Auto-renewing subscription. Payment is charged to your Google Play account upon confirmation and renews automatically at the listed recurring rate unless cancelled at least 24 hours before the end of the current period. Manage or cancel anytime in Google Play Store &gt; Payments &amp; subscriptions &gt; Subscriptions.</string>
+    <string name="bonbon_tax_and_refund_terms">Prices shown in Google Play include applicable taxes/GST where required by law. Virtual coins, diamonds, and boosters have no cash value; refunds are governed by the Google Play Refund Policy and mandatory consumer rights.</string>
+    <string name="bonbon_ad_unavailable">Rewarded ad is not available right now. Please try again in a moment.</string>
 
     <!-- Gameplay & Objectives -->
     <string name="level_title">Level %1$d</string>

@@ -174,26 +174,25 @@
         <div class="header">
             <div class="icon">🍬</div>
             <h1>Bonbon Bloom</h1>
-            <p>User Account & Associated Data Deletion Policy</p>
+            <p>User Account &amp; Associated Data Deletion Policy</p>
         </div>
 
-        <p>In accordance with the <strong>Google Play User Data & Account Deletion Policy</strong>, General Data Protection Regulation (GDPR), and the California Consumer Privacy Act (CCPA), players of <strong>Bonbon Bloom</strong> have the right to permanently request the deletion of their game account and all associated cloud data.</p>
+        <p>In accordance with the <strong>Google Play User Data &amp; Account Deletion Policy</strong>, GDPR, CCPA, and India's DPDP Act, players of <strong>Bonbon Bloom</strong> can permanently delete their account and associated cloud records at any time.</p>
 
         <div class="highlight-box">
-            <strong>⚠️ Irreversible Action:</strong> Deleting your account will permanently wipe your level progression (Levels 1–1000), earned stars, high scores, coin & gem balances, active VIP status, booster inventory, and Firebase Authentication profile. Once completed, this data cannot be recovered.
+            <strong>⚠️ Irreversible Action:</strong> Deleting your account permanently erases your level progression (Levels 1–1000), stars, high scores, coin &amp; gem balances, booster inventory, active local entitlements, and Firebase Authentication profile. Note: deleting your game account does not automatically cancel an active Google Play recurring subscription — please also cancel subscriptions via Google Play Store &gt; Payments &amp; subscriptions.
         </div>
 
         <h2>Method 1: Instant In-App Deletion (Recommended)</h2>
-        <p>If you have the game installed on your device, you can delete your account immediately without waiting:</p>
         <ol>
-            <li>Launch <strong>Bonbon Bloom</strong> on your Android device.</li>
-            <li>Tap the <strong>⚙️ Settings</strong> icon in the top header.</li>
-            <li>Scroll down and tap <strong>"Delete My Account & Data"</strong>.</li>
-            <li>Confirm the prompt. Your local database, cloud Firestore profile, and Firebase credentials are wiped instantly.</li>
+            <li>Open <strong>Bonbon Bloom</strong> on your Android device.</li>
+            <li>Tap <strong>Settings</strong> in the top header.</li>
+            <li>Tap <strong>"Delete Account &amp; Data"</strong> and confirm.</li>
+            <li>Your local Room database, Cloud Firestore document, subcollections, and Firebase Auth account are wiped immediately.</li>
         </ol>
 
         <h2>Method 2: Web Deletion Request Form</h2>
-        <p>If you uninstalled the game or cannot access your device, submit the form below. Requests are transmitted to the backend verification queue and processed within 24 to 48 business hours:</p>
+        <p>If you already uninstalled the app, submit the form below to queue an automated deletion of your cloud records within 24–48 business hours:</p>
 
         <div class="form-card">
             <form id="deleteForm" onsubmit="handleSubmit(event)">
@@ -217,25 +216,22 @@
                 Your request has been registered in our verified deletion queue.<br>
                 Tracking Reference ID:<br>
                 <span id="trackingId" class="tracking-badge"></span><br><br>
-                All associated account data, Cloud Firestore documents under <code>/users/{uid}</code>, and linked Google Sign-In credentials will be permanently purged within 48 business hours. An identity verification receipt has been logged.
+                All associated account data under <code>/users/{uid}</code> and linked Google Sign-In credentials will be permanently purged within 48 business hours.
             </div>
         </div>
 
         <h2>Data Types Deleted</h2>
         <ul>
-            <li><strong>Firebase Authentication ID & Credentials:</strong> Firebase Auth UID, email reference, and linked Google Sign-In profile.</li>
-            <li><strong>Cloud Save Document (Firestore):</strong> All progression documents stored under <code>/users/{uid}</code> including scores, level milestones, coin/gem counters, and booster inventory.</li>
-            <li><strong>Local Game Database:</strong> Room database records stored locally on the device (cleared automatically via in-app or next app launch).</li>
+            <li><strong>Firebase Authentication Identity:</strong> UID, email reference, and linked Google Sign-In profile.</li>
+            <li><strong>Cloud Firestore Records:</strong> <code>/users/{uid}</code>, <code>level_progress</code>, <code>purchases</code>, <code>ledger</code>, and <code>reward_requests</code>.</li>
+            <li><strong>Local SQLite Room Database:</strong> Player profile, level progress, and cached purchase records.</li>
         </ul>
 
-        <h2>Data Retention Period</h2>
-        <p>Upon receipt of a verified deletion request, all personal and gameplay records are expunged within <strong>48 hours</strong>. Any aggregated, anonymized telemetry (e.g. non-personal crash analytics) that does not identify an individual is retained for up to 30 days strictly for crash triage.</p>
-
-        <h2>Contact Data Controller & Support</h2>
-        <p>For privacy queries and deletion assistance, contact the Bonbon Bloom support team at: <a href="mailto:support@earnvero.app" style="color: #D81B60; font-weight: 600;">support@earnvero.app</a>.</p>
+        <h2>Contact Data Controller &amp; Support</h2>
+        <p>Questions or manual deletion assistance: <a href="mailto:support@earnvero.app" style="color: #D81B60; font-weight: 600;">support@earnvero.app</a>.</p>
 
         <div class="footer">
-            <p>&copy; 2026 Bonbon Bloom Team. All rights reserved. | <a href="/index.html">Home</a></p>
+            <p>&copy; 2026 Novaro Technologies &bull; Bonbon Bloom &bull; <a href="privacy.html">Privacy Policy</a> &bull; <a href="terms.html">Terms of Service</a></p>
         </div>
     </div>
 
@@ -252,44 +248,32 @@
             const username = document.getElementById('username').value.trim();
             const reason = document.getElementById('reason').value.trim();
 
-            const reqId = "DEL-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).substring(2, 7).toUpperCase();
+            const fallbackReqId = "DEL-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).substring(2, 7).toUpperCase();
 
-            // Transmit request to Firestore REST backend
             try {
-                const endpoint = "https://firestore.googleapis.com/v1/projects/gen-lang-client-0152472229/databases/(default)/documents/account_deletion_requests?key=AIzaSyCfPnxAu4rf26pjcU6lvDZi8kiBegFmzOw";
-                const payload = {
-                    fields: {
-                        email: { stringValue: email },
-                        username: { stringValue: username || "Guest" },
-                        reason: { stringValue: reason || "User web request" },
-                        status: { stringValue: "PENDING" },
-                        requestId: { stringValue: reqId },
-                        timestamp: { integerValue: String(Date.now()) }
-                    }
-                };
-
+                const endpoint = "https://us-central1-gen-lang-client-0152472229.cloudfunctions.net/requestWebAccountDeletion";
                 const res = await fetch(endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({ email, username, reason })
                 });
 
-                if (!res.ok) {
-                    throw new Error("Backend server responded with code " + res.status);
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.ok) {
+                    throw new Error(data.error || ("Backend server responded with code " + res.status));
                 }
 
                 document.getElementById('deleteForm').style.display = 'none';
-                document.getElementById('trackingId').textContent = reqId;
+                document.getElementById('trackingId').textContent = data.requestId || fallbackReqId;
                 document.getElementById('confirmation').style.display = 'block';
             } catch (err) {
-                console.warn("Backend API dispatch failed, fallback to registered mailto dispatch: ", err);
-                // Resilient fallback: open direct verified deletion email to support with pre-filled tracking token
-                const mailtoUrl = "mailto:support@earnvero.app?subject=" + encodeURIComponent("Account Deletion Request [" + reqId + "]") + 
-                                  "&body=" + encodeURIComponent("Please delete my Bonbon Bloom game account.\nEmail: " + email + "\nUsername: " + username + "\nTracking ID: " + reqId + "\nReason: " + reason);
+                console.warn("Backend deletion endpoint unreachable, opening mailto fallback:", err);
+                const mailtoUrl = "mailto:support@earnvero.app?subject=" + encodeURIComponent("Account Deletion Request [" + fallbackReqId + "]") +
+                    "&body=" + encodeURIComponent("Please delete my Bonbon Bloom game account.\nEmail: " + email + "\nUsername: " + username + "\nTracking ID: " + fallbackReqId + "\nReason: " + reason);
                 window.location.href = mailtoUrl;
 
                 document.getElementById('deleteForm').style.display = 'none';
-                document.getElementById('trackingId').textContent = reqId;
+                document.getElementById('trackingId').textContent = fallbackReqId;
                 document.getElementById('confirmation').style.display = 'block';
             }
         }

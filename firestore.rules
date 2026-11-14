@@ -2,106 +2,204 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
-    function isAuthenticated() {
+    // Global safety net: deny all reads and writes unless explicitly matched below
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Primitives ---
+
+    function isSignedIn() {
       return request.auth != null;
     }
 
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isImmutable(field) {
-      return !(field in request.resource.data) || 
-             (resource != null && request.resource.data[field] == resource.data[field]);
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    // User profile document: Zero-trust architecture
+    function isValidLevelId(levelId) {
+      return levelId is string && levelId.matches('^([1-9][0-9]{0,2}|1000)$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Blueprints ---
+
+    function isValidUserProfile(data) {
+      return data.username is string && data.username.size() >= 1 && data.username.size() <= 64 &&
+             (!('email' in data) || data.email == null || (data.email is string && data.email.size() <= 254)) &&
+             (!('authProvider' in data) || (data.authProvider is string && data.authProvider.size() >= 1 && data.authProvider.size() <= 32)) &&
+             data.highestUnlockedLevel is int && data.highestUnlockedLevel >= 1 && data.highestUnlockedLevel <= 1000 &&
+             data.coins is int && data.coins >= 0 &&
+             data.diamonds is int && data.diamonds >= 0 &&
+             (!('lives' in data) || (data.lives is int && data.lives >= 0 && data.lives <= 20)) &&
+             (!('hammerCount' in data) || (data.hammerCount is int && data.hammerCount >= 0)) &&
+             (!('shuffleCount' in data) || (data.shuffleCount is int && data.shuffleCount >= 0)) &&
+             (!('colorBlastCount' in data) || (data.colorBlastCount is int && data.colorBlastCount >= 0)) &&
+             (!('extraMovesCount' in data) || (data.extraMovesCount is int && data.extraMovesCount >= 0)) &&
+             (!('magicWandCount' in data) || (data.magicWandCount is int && data.magicWandCount >= 0)) &&
+             (!('cosmicBlastCount' in data) || (data.cosmicBlastCount is int && data.cosmicBlastCount >= 0)) &&
+             data.isVipSubscribed is bool &&
+             (!('vipExpiryTimestamp' in data) || data.vipExpiryTimestamp is int) &&
+             data.hasRemovedAds is bool &&
+             data.isAdmin is bool &&
+             (!('soundEnabled' in data) || data.soundEnabled is bool) &&
+             (!('musicEnabled' in data) || data.musicEnabled is bool) &&
+             (!('hapticsEnabled' in data) || data.hapticsEnabled is bool) &&
+             (!('languageCode' in data) || (data.languageCode is string && data.languageCode.size() >= 2 && data.languageCode.size() <= 16)) &&
+             (!('lastCloudSyncTime' in data) || data.lastCloudSyncTime is int) &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidLevelProgress(data, levelIdStr) {
+      return data.levelId is int &&
+             data.levelId >= 1 &&
+             data.levelId <= 1000 &&
+             string(data.levelId) == levelIdStr &&
+             data.stars is int &&
+             data.stars >= 0 &&
+             data.stars <= 3 &&
+             data.highScore is int &&
+             data.highScore >= 0 &&
+             data.highScore <= 100000000 &&
+             data.completed is bool &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidDeletionRequest(data, requestIdStr) {
+      return data.requestId is string &&
+             data.requestId == requestIdStr &&
+             data.requestId.size() <= 128 &&
+             (!('reason' in data) || (data.reason is string && data.reason.size() <= 500)) &&
+             data.status is string &&
+             data.status.size() <= 32 &&
+             data.createdAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
     match /users/{userId} {
-      // 1. Players can only read their own cloud save document
-      allow read: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+      allow delete: if isOwner(userId) && isValidId(userId);
 
-      // 2. Account deletion: Players can delete their own profile document
-      allow delete: if isOwner(userId);
+      // Initial profile creation: strictly bounded non-premium defaults, no self-granted VIP/admin/coins
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().keys().hasAll([
+                         'username', 'highestUnlockedLevel', 'coins', 'diamonds',
+                         'isVipSubscribed', 'hasRemovedAds', 'isAdmin', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'username', 'email', 'authProvider', 'highestUnlockedLevel',
+                         'coins', 'diamonds', 'lives',
+                         'hammerCount', 'shuffleCount', 'colorBlastCount',
+                         'extraMovesCount', 'magicWandCount', 'cosmicBlastCount',
+                         'isVipSubscribed', 'vipExpiryTimestamp', 'hasRemovedAds', 'isAdmin',
+                         'soundEnabled', 'musicEnabled', 'hapticsEnabled', 'languageCode',
+                         'lastCloudSyncTime', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().coins <= 500 &&
+                       incoming().diamonds <= 25 &&
+                       incoming().isVipSubscribed == false &&
+                       (!('vipExpiryTimestamp' in incoming()) || incoming().vipExpiryTimestamp == 0) &&
+                       incoming().hasRemovedAds == false &&
+                       incoming().isAdmin == false &&
+                       incoming().createdAt <= request.time &&
+                       incoming().updatedAt <= request.time;
 
-      // 3. Initial profile creation: strictly bounded starting values
-      allow create: if isOwner(userId)
-        && (!('highestUnlockedLevel' in request.resource.data) || 
-            (request.resource.data.highestUnlockedLevel is int && 
-             request.resource.data.highestUnlockedLevel == 1))
-        && (!('coins' in request.resource.data) || 
-            (request.resource.data.coins is int && 
-             request.resource.data.coins >= 0 && 
-             request.resource.data.coins <= 500))
-        && (!('diamonds' in request.resource.data) || 
-            (request.resource.data.diamonds is int && 
-             request.resource.data.diamonds >= 0 && 
-             request.resource.data.diamonds <= 25))
-        && (!('isVipSubscribed' in request.resource.data) || request.resource.data.isVipSubscribed == false)
-        && (!('hasRemovedAds' in request.resource.data) || request.resource.data.hasRemovedAds == false)
-        && (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false);
+      // Client updates: strictly limited to profile settings & monotonic level progress.
+      // Economy (coins/diamonds/boosters), VIP, hasRemovedAds, and isAdmin are server-only!
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt <= request.time &&
+                       incoming().highestUnlockedLevel >= existing().highestUnlockedLevel &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'username', 'email', 'authProvider', 'highestUnlockedLevel',
+                         'soundEnabled', 'musicEnabled', 'hapticsEnabled', 'languageCode',
+                         'lastCloudSyncTime', 'updatedAt'
+                       ]);
 
-      // 4. Profile updates: Client CANNOT modify trusted currency, VIP, or entitlements directly
-      allow update: if isOwner(userId)
-        // Progression is monotonic (can only advance, never roll back, max 1000)
-        && (!('highestUnlockedLevel' in request.resource.data) || 
-            (request.resource.data.highestUnlockedLevel is int &&
-             request.resource.data.highestUnlockedLevel <= 1000 &&
-             (resource == null || request.resource.data.highestUnlockedLevel >= resource.data.highestUnlockedLevel)))
-        // Trusted balances and entitlements MUST be immutable to client updates
-        && isImmutable('coins')
-        && isImmutable('diamonds')
-        && isImmutable('isVipSubscribed')
-        && isImmutable('vipExpiryTimestamp')
-        && isImmutable('hasRemovedAds')
-        && isImmutable('isAdmin');
+      // Per-level progression records: owner-scoped monotonic updates
+      match /level_progress/{levelId} {
+        allow get, delete: if isOwner(userId) && isValidId(userId) && isValidLevelId(levelId);
+        allow list: if isOwner(userId) && isValidId(userId);
 
-      // 5. Purchases subcollection: Durable audit log of Google Play purchases
+        allow create: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidLevelId(levelId) &&
+                         isValidLevelProgress(incoming(), levelId) &&
+                         incoming().keys().hasAll(['levelId', 'stars', 'highScore', 'completed', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['levelId', 'stars', 'highScore', 'completed', 'updatedAt']) &&
+                         incoming().updatedAt <= request.time;
+
+        allow update: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidLevelId(levelId) &&
+                         isValidLevelProgress(incoming(), levelId) &&
+                         incoming().levelId == existing().levelId &&
+                         incoming().stars >= existing().stars &&
+                         incoming().highScore >= existing().highScore &&
+                         (!existing().completed || incoming().completed) &&
+                         incoming().updatedAt <= request.time &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'levelId', 'stars', 'highScore', 'completed', 'updatedAt'
+                         ]);
+      }
+
+      // Google Play verified purchases: strictly server-written via Cloud Functions Admin SDK
       match /purchases/{purchaseId} {
-        allow read: if isOwner(userId);
-        // Client can only create an initial pending purchase record with idempotency key
-        allow create: if isOwner(userId)
-          && request.resource.data.keys().hasAll(['productId', 'purchaseToken', 'timestamp'])
-          && request.resource.data.timestamp is int;
-        // Purchases are immutable and permanent once recorded
-        allow update, delete: if false;
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(purchaseId);
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow create, update, delete: if false;
       }
 
-      // 5b. Auditable Transaction Ledger: Readable by account owner, writable only by trusted backend
+      // Immutable auditable transaction ledger: strictly server-written
       match /ledger/{ledgerId} {
-        allow read: if isOwner(userId);
-        allow write: if false;
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(ledgerId);
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow create, update, delete: if false;
       }
 
-      // 6. Reward requests subcollection: Durable log of verified AdMob rewarded sessions
+      // AdMob SSV reward audit records: strictly server-written
       match /reward_requests/{requestId} {
-        allow read: if isOwner(userId);
-        // Client can create a reward verification record with transactionId and amount
-        allow create: if isOwner(userId)
-          && request.resource.data.keys().hasAll(['transactionId', 'amount', 'timestamp'])
-          && request.resource.data.amount is int
-          && request.resource.data.amount <= 100
-          && request.resource.data.timestamp is int;
-        allow update, delete: if false;
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(requestId);
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow create, update, delete: if false;
       }
 
-      // 7. Deletion requests subcollection: GDPR & Google Play account deletion auditing
+      // In-app deletion ticket audit records: immutable once filed by owner
       match /deletion_requests/{requestId} {
-        allow read, create: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(requestId);
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow create: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidId(requestId) &&
+                         isValidDeletionRequest(incoming(), requestId) &&
+                         incoming().keys().hasAll(['requestId', 'status', 'createdAt']) &&
+                         incoming().keys().hasOnly(['requestId', 'reason', 'status', 'createdAt']) &&
+                         incoming().status == 'PENDING' &&
+                         incoming().createdAt <= request.time;
         allow update, delete: if false;
       }
     }
 
-    // Public / server-side account deletion requests collection (for web portal requests)
+    // Public web deletion queue is strictly server-written via requestWebAccountDeletion HTTPS endpoint
     match /account_deletion_requests/{requestId} {
-      allow create: if request.resource.data.keys().hasAll(['email', 'timestamp', 'status'])
-                    && request.resource.data.email is string
-                    && request.resource.data.status == 'PENDING';
-      allow read, update, delete: if false;
-    }
-
-    // Default deny for all other collections
-    match /{document=**} {
       allow read, write: if false;
     }
   }

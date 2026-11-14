@@ -111,8 +111,6 @@ fun AccountProfileDialog(
                             shape = CircleShape,
                             color = when (profile.authProvider) {
                                 "GOOGLE" -> Color(0xFF4285F4)
-                                "EMAIL" -> Color(0xFF7C4DFF)
-                                "PHONE" -> Color(0xFF00B0FF)
                                 else -> Color(0xFFFF4081)
                             },
                             modifier = Modifier.size(54.dp)
@@ -121,10 +119,6 @@ fun AccountProfileDialog(
                                 Text(
                                     text = when (profile.authProvider) {
                                         "GOOGLE" -> "🌐"
-                                        "EMAIL" -> "📧"
-                                        "PHONE" -> "📱"
-                                        "APPLE" -> "🍎"
-                                        "FACEBOOK" -> "📘"
                                         else -> "👤"
                                     },
                                     fontSize = 24.sp
@@ -236,7 +230,7 @@ fun AccountProfileDialog(
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
                         modifier = Modifier.fillMaxWidth().height(46.dp)
                     ) {
-                        Text("Sign In with Google or Email 🔑", fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Sign In with Google 🔑", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 } else {
                     Row(

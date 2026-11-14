@@ -5,48 +5,118 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import com.android.billingclient.api.*
-import com.example.BuildConfig
 import com.example.auth.CloudSyncManager
+import com.example.data.UserDao
+import com.example.data.UserRepository
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.ConcurrentHashMap
+
+data class ProductOfferUi(
+    val productId: String,
+    val isSubscription: Boolean,
+    val title: String,
+    val description: String,
+    val formattedPrice: String,
+    val priceCurrencyCode: String,
+    val billingPeriodIso: String? = null,
+    val offerToken: String? = null
+)
+
+sealed class BillingUiState {
+    data object Idle : BillingUiState()
+    data class Connecting(val message: String = "Connecting to Google Play...") : BillingUiState()
+    data object Ready : BillingUiState()
+    data class Launching(val productId: String) : BillingUiState()
+    data class PendingPayment(val productId: String, val orderId: String) : BillingUiState()
+    data class VerifyingServer(val productId: String) : BillingUiState()
+    data class Success(
+        val productId: String,
+        val isSubscription: Boolean,
+        val verifiedByServer: Boolean
+    ) : BillingUiState()
+    data object Cancelled : BillingUiState()
+    data class Unavailable(
+        val reason: String,
+        val responseCode: Int? = null,
+        val productId: String? = null,
+        val isSubscription: Boolean = false
+    ) : BillingUiState()
+    data class Error(val message: String, val responseCode: Int? = null) : BillingUiState()
+}
 
 /**
- * PlayBillingManager handles Google Play Billing Library 7.x integration for Bonbon Bloom:
- * - One-time in-app products (Coins, Gems, Booster packs, Remove Ads)
- * - Auto-renewing VIP Subscriptions
- * - Permanent persistent replay protection across application restarts via SharedPreferences
- * - Crash-resilient two-phase consumption workflow
- * - Durable cloud purchase audit recording
- * - Offline / Startup purchase restoration & subscription revocation verification
- * - Non-GMS defensive safety for third-party stores
+ * PlayBillingManager coordinates Google Play Billing Library 8.0.0 for Bonbon Bloom:
+ * - Preloads live ProductDetails & localized Play Console pricing for all SUBS and INAPP SKUs.
+ * - Automatic connection retry & actionable unavailability feedback (no silent no-ops, no free grants).
+ * - Strict purchaseState == PURCHASED verification with Cloud Function receipt check + Room ledger deduplication.
+ * - Crash-resilient acknowledgment (SUBS / Remove Ads) and consumption (Coins / Diamonds / Starter Pack).
+ * - Startup & resume entitlement restoration + revocation enforcement.
  */
 object PlayBillingManager {
     private const val TAG = "PlayBillingManager"
 
-    // Product IDs
-    const val PRODUCT_REMOVE_ADS = "remove_ads"
+    // Subscriptions
+    const val PRODUCT_VIP_WEEKLY = "vip_weekly"
     const val PRODUCT_VIP_MONTHLY = "vip_monthly"
+
+    // Non-consumable
+    const val PRODUCT_REMOVE_ADS = "remove_ads"
+
+    // Consumables
     const val PRODUCT_COINS_500 = "coins_500"
     const val PRODUCT_COINS_1500 = "coins_1500"
     const val PRODUCT_COINS_5000 = "coins_5000"
     const val PRODUCT_GEMS_50 = "gems_50"
+    const val PRODUCT_GEMS_150 = "gems_150"
     const val PRODUCT_GEMS_200 = "gems_200"
+    const val PRODUCT_GEMS_500 = "gems_500"
     const val PRODUCT_GEMS_600 = "gems_600"
+    const val PRODUCT_GEMS_1500 = "gems_1500"
     const val PRODUCT_STARTER_PACK = "booster_starter_pack"
+
+    val ALL_SUBSCRIPTION_SKUS = listOf(PRODUCT_VIP_WEEKLY, PRODUCT_VIP_MONTHLY)
+    val ALL_INAPP_SKUS = listOf(
+        PRODUCT_REMOVE_ADS,
+        PRODUCT_COINS_500,
+        PRODUCT_COINS_1500,
+        PRODUCT_COINS_5000,
+        PRODUCT_GEMS_50,
+        PRODUCT_GEMS_150,
+        PRODUCT_GEMS_200,
+        PRODUCT_GEMS_500,
+        PRODUCT_GEMS_600,
+        PRODUCT_GEMS_1500,
+        PRODUCT_STARTER_PACK
+    )
 
     private const val PREFS_NAME = "bonbon_billing_prefs"
     private const val KEY_PROCESSED_TOKENS = "processed_purchase_tokens"
-    private const val KEY_PENDING_PURCHASES = "pending_unconsumed_purchases"
 
     private var billingClient: BillingClient? = null
+    @Volatile
     private var isConnected = false
-    private val scope = CoroutineScope(Dispatchers.IO)
+    @Volatile
+    private var lastSetupErrorCode: Int? = null
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var appContext: Context? = null
+    private var userRepository: UserRepository? = null
+    private val cachedProductDetails = ConcurrentHashMap<String, ProductDetails>()
+
+    private val _billingState = MutableStateFlow<BillingUiState>(BillingUiState.Idle)
+    val billingState: StateFlow<BillingUiState> = _billingState.asStateFlow()
+
+    private val _productOffers = MutableStateFlow<Map<String, ProductOfferUi>>(emptyMap())
+    val productOffers: StateFlow<Map<String, ProductOfferUi>> = _productOffers.asStateFlow()
 
     private val _purchasedProductIds = MutableStateFlow<Set<String>>(emptySet())
     val purchasedProductIds: StateFlow<Set<String>> = _purchasedProductIds.asStateFlow()
@@ -57,7 +127,6 @@ object PlayBillingManager {
     private val _isVipActive = MutableStateFlow(false)
     val isVipActive: StateFlow<Boolean> = _isVipActive.asStateFlow()
 
-    // Callback on purchase success: (productId: String, isSubscription: Boolean) -> Unit
     var onPurchaseCompleted: ((productId: String, isSubscription: Boolean) -> Unit)? = null
 
     private fun getPrefs(context: Context): SharedPreferences {
@@ -65,8 +134,7 @@ object PlayBillingManager {
     }
 
     private fun isTokenProcessed(context: Context, token: String): Boolean {
-        val prefs = getPrefs(context)
-        val set = prefs.getStringSet(KEY_PROCESSED_TOKENS, emptySet()) ?: emptySet()
+        val set = getPrefs(context).getStringSet(KEY_PROCESSED_TOKENS, emptySet()) ?: emptySet()
         return set.contains(token)
     }
 
@@ -77,33 +145,64 @@ object PlayBillingManager {
         prefs.edit().putStringSet(KEY_PROCESSED_TOKENS, updated).apply()
     }
 
-    private fun savePendingPurchase(context: Context, token: String, productId: String) {
-        val prefs = getPrefs(context)
-        val current = prefs.getStringSet(KEY_PENDING_PURCHASES, emptySet()) ?: emptySet()
-        val entry = "$token|$productId"
-        val updated = HashSet(current).apply { add(entry) }
-        prefs.edit().putStringSet(KEY_PENDING_PURCHASES, updated).apply()
+    fun dismissBillingState() {
+        _billingState.value = if (isConnected) BillingUiState.Ready else BillingUiState.Idle
     }
 
-    private fun removePendingPurchase(context: Context, token: String) {
-        val prefs = getPrefs(context)
-        val current = prefs.getStringSet(KEY_PENDING_PURCHASES, emptySet()) ?: emptySet()
-        val updated = current.filterNot { it.startsWith("$token|") }.toSet()
-        prefs.edit().putStringSet(KEY_PENDING_PURCHASES, updated).apply()
-    }
-
-    fun initialize(context: Context) {
+    fun initialize(context: Context, userDao: UserDao? = null) {
         appContext = context.applicationContext
+        if (userDao != null) {
+            userRepository = UserRepository(userDao)
+        }
+        if (billingClient != null) {
+            if (!isConnected) {
+                reconnectAndPreload()
+            }
+            return
+        }
         try {
             val listener = PurchasesUpdatedListener { billingResult, purchases ->
-                if (billingResult.responseCode == BillingClient.BillingResponseCode.OK && purchases != null) {
-                    for (purchase in purchases) {
-                        handlePurchase(purchase)
+                when (billingResult.responseCode) {
+                    BillingClient.BillingResponseCode.OK -> {
+                        if (!purchases.isNullOrEmpty()) {
+                            for (purchase in purchases) {
+                                handlePurchase(purchase)
+                            }
+                        } else {
+                            _billingState.value = BillingUiState.Error(
+                                "Google Play returned no purchase details. Please tap Restore Purchases if charged.",
+                                billingResult.responseCode
+                            )
+                        }
                     }
-                } else if (billingResult.responseCode == BillingClient.BillingResponseCode.USER_CANCELED) {
-                    Log.i(TAG, "User cancelled purchase flow.")
-                } else {
-                    Log.w(TAG, "Purchase failed with code: ${billingResult.responseCode} - ${billingResult.debugMessage}")
+                    BillingClient.BillingResponseCode.USER_CANCELED -> {
+                        Log.i(TAG, "User cancelled Play Billing sheet.")
+                        _billingState.value = BillingUiState.Cancelled
+                    }
+                    BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED -> {
+                        Log.i(TAG, "Item already owned; restoring purchases from Google Play.")
+                        queryAndRestorePurchases { success, restored ->
+                            if (success && restored.isNotEmpty()) {
+                                _billingState.value = BillingUiState.Success(
+                                    productId = restored.first(),
+                                    isSubscription = restored.first() in ALL_SUBSCRIPTION_SKUS,
+                                    verifiedByServer = false
+                                )
+                            } else {
+                                _billingState.value = BillingUiState.Error(
+                                    "You already own this item. Restored active entitlements.",
+                                    billingResult.responseCode
+                                )
+                            }
+                        }
+                    }
+                    else -> {
+                        Log.w(TAG, "Purchase failed: ${billingResult.responseCode} - ${billingResult.debugMessage}")
+                        _billingState.value = BillingUiState.Error(
+                            explainBillingCode(billingResult.responseCode, billingResult.debugMessage),
+                            billingResult.responseCode
+                        )
+                    }
                 }
             }
 
@@ -112,92 +211,235 @@ object PlayBillingManager {
                 .enablePrepaidPlans()
                 .build()
 
-            billingClient = BillingClient.newBuilder(context)
+            billingClient = BillingClient.newBuilder(appContext!!)
                 .setListener(listener)
                 .enablePendingPurchases(pendingParams)
                 .build()
 
-            startConnection {
-                queryAndRestorePurchases()
-            }
+            reconnectAndPreload()
         } catch (e: Throwable) {
-            Log.w(TAG, "Play Billing initialization not available on this device: ${e.message}")
+            Log.w(TAG, "Play Billing initialization unavailable on this device: ${e.message}")
             isConnected = false
+            _billingState.value = BillingUiState.Unavailable(
+                reason = "Google Play Billing service is not available on this device (${e.message ?: "no Play Services"})."
+            )
         }
     }
 
-    private fun startConnection(onConnected: () -> Unit) {
-        billingClient?.startConnection(object : BillingClientStateListener {
-            override fun onBillingSetupFinished(billingResult: BillingResult) {
-                if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                    isConnected = true
-                    Log.i(TAG, "Google Play Billing setup successful.")
-                    onConnected()
-                } else {
-                    isConnected = false
-                    Log.w(TAG, "Billing setup finished with code: ${billingResult.responseCode}")
+    fun reconnectAndPreload() {
+        scope.launch {
+            val connected = ensureConnected()
+            if (connected) {
+                preloadAllProductDetails()
+                queryAndRestorePurchases()
+            }
+        }
+    }
+
+    private suspend fun ensureConnected(): Boolean {
+        val client = billingClient ?: run {
+            val ctx = appContext ?: return false
+            initialize(ctx)
+            billingClient ?: return false
+        }
+        if (isConnected && client.isReady) return true
+
+        _billingState.value = BillingUiState.Connecting()
+        val deferred = CompletableDeferred<Boolean>()
+        try {
+            withContext(Dispatchers.Main) {
+                client.startConnection(object : BillingClientStateListener {
+                    override fun onBillingSetupFinished(billingResult: BillingResult) {
+                        if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                            isConnected = true
+                            lastSetupErrorCode = null
+                            if (!deferred.isCompleted) deferred.complete(true)
+                        } else {
+                            isConnected = false
+                            lastSetupErrorCode = billingResult.responseCode
+                            Log.w(TAG, "Billing setup error ${billingResult.responseCode}: ${billingResult.debugMessage}")
+                            if (!deferred.isCompleted) deferred.complete(false)
+                        }
+                    }
+
+                    override fun onBillingServiceDisconnected() {
+                        isConnected = false
+                        Log.w(TAG, "Billing service disconnected.")
+                        if (!deferred.isCompleted) deferred.complete(false)
+                    }
+                })
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "Billing startConnection threw: ${e.message}")
+            isConnected = false
+            return false
+        }
+
+        val result = withTimeoutOrNull(6000L) { deferred.await() } ?: false
+        if (result) {
+            _billingState.value = BillingUiState.Ready
+        }
+        return result
+    }
+
+    suspend fun preloadAllProductDetails() {
+        val client = billingClient ?: return
+        if (!client.isReady) return
+
+        val offersMap = _productOffers.value.toMutableMap()
+
+        // Query subscriptions
+        val subsParams = QueryProductDetailsParams.newBuilder()
+            .setProductList(
+                ALL_SUBSCRIPTION_SKUS.map { sku ->
+                    QueryProductDetailsParams.Product.newBuilder()
+                        .setProductId(sku)
+                        .setProductType(BillingClient.ProductType.SUBS)
+                        .build()
+                }
+            )
+            .build()
+
+        val subsResult = client.queryProductDetails(subsParams)
+        if (subsResult.billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+            subsResult.productDetailsList.orEmpty().forEach { details ->
+                cachedProductDetails[details.productId] = details
+                val offer = details.subscriptionOfferDetails?.firstOrNull()
+                val recurringPhase = offer?.pricingPhases?.pricingPhaseList?.lastOrNull()
+                if (recurringPhase != null && offer != null) {
+                    offersMap[details.productId] = ProductOfferUi(
+                        productId = details.productId,
+                        isSubscription = true,
+                        title = details.title,
+                        description = details.description,
+                        formattedPrice = recurringPhase.formattedPrice,
+                        priceCurrencyCode = recurringPhase.priceCurrencyCode,
+                        billingPeriodIso = recurringPhase.billingPeriod,
+                        offerToken = offer.offerToken
+                    )
                 }
             }
+        } else {
+            Log.w(TAG, "Failed preloading SUBS details: ${subsResult.billingResult.responseCode}")
+        }
 
-            override fun onBillingServiceDisconnected() {
-                isConnected = false
-                Log.w(TAG, "Billing service disconnected. Will retry on next request.")
+        // Query in-app products
+        val inAppParams = QueryProductDetailsParams.newBuilder()
+            .setProductList(
+                ALL_INAPP_SKUS.map { sku ->
+                    QueryProductDetailsParams.Product.newBuilder()
+                        .setProductId(sku)
+                        .setProductType(BillingClient.ProductType.INAPP)
+                        .build()
+                }
+            )
+            .build()
+
+        val inAppResult = client.queryProductDetails(inAppParams)
+        if (inAppResult.billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+            inAppResult.productDetailsList.orEmpty().forEach { details ->
+                cachedProductDetails[details.productId] = details
+                val oneTime = details.oneTimePurchaseOfferDetails
+                if (oneTime != null) {
+                    offersMap[details.productId] = ProductOfferUi(
+                        productId = details.productId,
+                        isSubscription = false,
+                        title = details.title,
+                        description = details.description,
+                        formattedPrice = oneTime.formattedPrice,
+                        priceCurrencyCode = oneTime.priceCurrencyCode
+                    )
+                }
             }
-        })
+        } else {
+            Log.w(TAG, "Failed preloading INAPP details: ${inAppResult.billingResult.responseCode}")
+        }
+
+        _productOffers.value = offersMap
     }
 
     /**
-     * Launch Google Play Billing Purchase Flow for a specified product ID.
+     * Launch Google Play Billing purchase flow. Automatically reconnects and fetches live ProductDetails
+     * if disconnected. Never grants items on missing connection, missing SKU, or error.
      */
     fun launchPurchaseFlow(
         activity: Activity,
         productId: String,
-        isSubscription: Boolean = false,
-        onSuccessFallback: (() -> Unit)? = null
+        isSubscription: Boolean = productId in ALL_SUBSCRIPTION_SKUS
     ) {
-        val client = billingClient
-        if (client == null || !isConnected) {
-            Log.w(TAG, "BillingClient not connected.")
-            if (BuildConfig.DEBUG && onSuccessFallback != null) {
-                Log.i(TAG, "[DEBUG ONLY] Sandbox fallback for $productId")
-                onSuccessFallback()
-                if (productId == PRODUCT_REMOVE_ADS) _hasRemovedAds.value = true
-                if (productId == PRODUCT_VIP_MONTHLY) _isVipActive.value = true
-            }
+        if (productId.isBlank()) {
+            _billingState.value = BillingUiState.Error("Invalid product SKU selected.")
             return
         }
 
+        _billingState.value = BillingUiState.Launching(productId)
+
         scope.launch {
-            val productType = if (isSubscription) BillingClient.ProductType.SUBS else BillingClient.ProductType.INAPP
-            val productList = listOf(
-                QueryProductDetailsParams.Product.newBuilder()
-                    .setProductId(productId)
-                    .setProductType(productType)
-                    .build()
-            )
-
-            val params = QueryProductDetailsParams.newBuilder()
-                .setProductList(productList)
-                .build()
-
-            val productDetailsResult = client.queryProductDetails(params)
-            val detailsList = productDetailsResult.productDetailsList
-
-            if (detailsList.isNullOrEmpty()) {
-                Log.w(TAG, "Product details not found on Play Console for $productId. Code: ${productDetailsResult.billingResult.responseCode}")
-                if (BuildConfig.DEBUG && onSuccessFallback != null) {
-                    withContext(Dispatchers.Main) {
-                        onSuccessFallback()
-                        if (productId == PRODUCT_REMOVE_ADS) _hasRemovedAds.value = true
-                        if (productId == PRODUCT_VIP_MONTHLY) _isVipActive.value = true
-                    }
-                }
+            if (!ensureConnected()) {
+                _billingState.value = BillingUiState.Unavailable(
+                    reason = explainBillingCode(
+                        lastSetupErrorCode ?: BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE,
+                        "Google Play Billing could not connect."
+                    ),
+                    responseCode = lastSetupErrorCode,
+                    productId = productId,
+                    isSubscription = isSubscription
+                )
                 return@launch
             }
 
-            val productDetails = detailsList[0]
+            val client = billingClient ?: run {
+                _billingState.value = BillingUiState.Unavailable(
+                    reason = "Google Play Billing client is unavailable.",
+                    productId = productId,
+                    isSubscription = isSubscription
+                )
+                return@launch
+            }
+
+            // Always ensure fresh ProductDetails from Play Store (single retry if absent)
+            var productDetails = cachedProductDetails[productId]
+            if (productDetails == null) {
+                val productType = if (isSubscription) BillingClient.ProductType.SUBS else BillingClient.ProductType.INAPP
+                val params = QueryProductDetailsParams.newBuilder()
+                    .setProductList(
+                        listOf(
+                            QueryProductDetailsParams.Product.newBuilder()
+                                .setProductId(productId)
+                                .setProductType(productType)
+                                .build()
+                        )
+                    )
+                    .build()
+                val queryResult = client.queryProductDetails(params)
+                productDetails = queryResult.productDetailsList?.firstOrNull()
+                if (productDetails != null) {
+                    cachedProductDetails[productId] = productDetails
+                    // Refresh live price map
+                    preloadAllProductDetails()
+                } else {
+                    val code = queryResult.billingResult.responseCode
+                    Log.w(TAG, "ProductDetails missing for $productId (sub=$isSubscription). Code=$code ${queryResult.billingResult.debugMessage}")
+                    _billingState.value = BillingUiState.Unavailable(
+                        reason = "Product '$productId' was not returned by Google Play (Code $code). Make sure you are signed into Google Play, installed from a Play testing track, and the SKU is Active in Play Console.",
+                        responseCode = code,
+                        productId = productId,
+                        isSubscription = isSubscription
+                    )
+                    return@launch
+                }
+            }
+
             val productDetailsParamsList = if (isSubscription) {
-                val offerToken = productDetails.subscriptionOfferDetails?.firstOrNull()?.offerToken ?: ""
+                val offerToken = productDetails.subscriptionOfferDetails?.firstOrNull()?.offerToken
+                if (offerToken.isNullOrBlank()) {
+                    _billingState.value = BillingUiState.Unavailable(
+                        reason = "No active subscription base plan found in Google Play Console for '$productId'.",
+                        productId = productId,
+                        isSubscription = true
+                    )
+                    return@launch
+                }
                 listOf(
                     BillingFlowParams.ProductDetailsParams.newBuilder()
                         .setProductDetails(productDetails)
@@ -216,150 +458,247 @@ object PlayBillingManager {
                 .setProductDetailsParamsList(productDetailsParamsList)
                 .build()
 
-            withContext(Dispatchers.Main) {
+            val launchResult = withContext(Dispatchers.Main) {
                 client.launchBillingFlow(activity, flowParams)
             }
+            if (launchResult.responseCode != BillingClient.BillingResponseCode.OK) {
+                _billingState.value = BillingUiState.Error(
+                    explainBillingCode(launchResult.responseCode, launchResult.debugMessage),
+                    launchResult.responseCode
+                )
+            }
         }
     }
 
-    /**
-     * Handles processing, acknowledgment, consumption, and durable recording of a purchase.
-     * Enforces persistent duplicate transaction prevention.
-     */
     private fun handlePurchase(purchase: Purchase) {
-        if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) {
-            if (purchase.purchaseState == Purchase.PurchaseState.PENDING) {
-                Log.i(TAG, "Purchase is pending confirmation from Google Play.")
+        val token = purchase.purchaseToken
+        val orderId = purchase.orderId ?: "GPA.PENDING"
+        val primarySku = purchase.products.firstOrNull() ?: return
+        val primaryIsSub = primarySku in ALL_SUBSCRIPTION_SKUS
+
+        if (purchase.purchaseState == Purchase.PurchaseState.PENDING) {
+            Log.i(TAG, "Purchase PENDING confirmation from Google Play: $primarySku ($orderId)")
+            scope.launch {
+                userRepository?.recordPendingPurchase(token, orderId, primarySku, primaryIsSub)
+                _billingState.value = BillingUiState.PendingPayment(primarySku, orderId)
             }
             return
         }
 
-        val token = purchase.purchaseToken
-        val context = appContext
-        if (token.isEmpty() || (context != null && isTokenProcessed(context, token))) {
-            Log.i(TAG, "Duplicate purchase token detected or already processed: $token")
+        if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) {
+            Log.w(TAG, "Ignoring non-purchased state=${purchase.purchaseState} for $primarySku")
+            _billingState.value = BillingUiState.Error("Payment was not completed by Google Play.")
             return
         }
 
         scope.launch {
-            val products = purchase.products
-            for (productId in products) {
-                val isSub = productId == PRODUCT_VIP_MONTHLY
-                val isNonConsumable = productId == PRODUCT_REMOVE_ADS
+            val ctx = appContext
+            val repo = userRepository
+            val alreadyEntitled = (ctx != null && isTokenProcessed(ctx, token)) ||
+                (repo != null && repo.isTokenAlreadyEntitled(token))
 
-                if (context != null) {
-                    savePendingPurchase(context, token, productId)
-                }
+            if (alreadyEntitled) {
+                // Ensure acknowledgment/consumption even if app crashed right after granting entitlement
+                completeAcknowledgeOrConsume(purchase)
+                Log.i(TAG, "Purchase token already entitled; synced acknowledgment state.")
+                return@launch
+            }
 
-                // Durable audit logging to Cloud Firestore
-                CloudSyncManager.recordPurchaseToCloud(token, productId, purchase.orderId ?: "GPA.0000")
+            _billingState.value = BillingUiState.VerifyingServer(primarySku)
 
-                if (isSub || isNonConsumable) {
-                    // Acknowledge non-consumable and subscriptions
-                    if (!purchase.isAcknowledged) {
-                        val ackParams = AcknowledgePurchaseParams.newBuilder()
-                            .setPurchaseToken(purchase.purchaseToken)
-                            .build()
-                        val result = billingClient?.acknowledgePurchase(ackParams)
-                        if (result?.responseCode == BillingClient.BillingResponseCode.OK) {
-                            Log.i(TAG, "Purchase acknowledged successfully: $productId")
-                        }
+            var verifiedByServer = false
+            var vipExpiryOverride: Long? = null
+
+            if (ctx != null) {
+                when (
+                    val verifyResult = CloudSyncManager.verifyPurchaseWithServer(
+                        context = ctx,
+                        productId = primarySku,
+                        purchaseToken = token,
+                        orderId = orderId,
+                        isSubscription = primaryIsSub
+                    )
+                ) {
+                    is CloudSyncManager.ServerVerifyResult.Verified -> {
+                        verifiedByServer = true
+                        vipExpiryOverride = verifyResult.vipExpiryMillis
                     }
-
-                    if (isNonConsumable) _hasRemovedAds.value = true
-                    if (isSub) _isVipActive.value = true
-
-                    if (context != null) {
-                        markTokenProcessed(context, token)
-                        removePendingPurchase(context, token)
+                    is CloudSyncManager.ServerVerifyResult.Rejected -> {
+                        Log.w(TAG, "Server rejected purchase token for $primarySku: ${verifyResult.reason}")
+                        _billingState.value = BillingUiState.Error(verifyResult.reason)
+                        return@launch
                     }
-                } else {
-                    // Consumable items: grant entitlement, then consume
-                    withContext(Dispatchers.Main) {
-                        _purchasedProductIds.value = _purchasedProductIds.value + productId
-                        onPurchaseCompleted?.invoke(productId, false)
+                    is CloudSyncManager.ServerVerifyResult.Unavailable -> {
+                        // Server unreachable or guest user: Play Billing PURCHASED state is already verified by Play Store.
+                        Log.w(TAG, "Server verification unavailable (${verifyResult.reason}); fulfilling Play-confirmed purchase locally.")
                     }
-
-                    val consumeParams = ConsumeParams.newBuilder()
-                        .setPurchaseToken(purchase.purchaseToken)
-                        .build()
-                    val consumeResult = billingClient?.consumePurchase(consumeParams)
-                    if (consumeResult?.billingResult?.responseCode == BillingClient.BillingResponseCode.OK) {
-                        Log.i(TAG, "Product consumed: $productId")
-                        if (context != null) {
-                            markTokenProcessed(context, token)
-                            removePendingPurchase(context, token)
-                        }
-                    }
-                    return@launch
-                }
-
-                withContext(Dispatchers.Main) {
-                    _purchasedProductIds.value = _purchasedProductIds.value + productId
-                    onPurchaseCompleted?.invoke(productId, isSub)
                 }
             }
+
+            // Apply entitlements via Room ledger + AntiCheat signature
+            for (productId in purchase.products) {
+                val isSub = productId in ALL_SUBSCRIPTION_SKUS
+                val isNonConsumable = productId == PRODUCT_REMOVE_ADS
+                val verificationSource = if (verifiedByServer) "CLOUD_FUNCTION" else "PLAY_BILLING_LOCAL"
+
+                repo?.applyVerifiedPlayPurchase(
+                    purchaseToken = token,
+                    orderId = orderId,
+                    productId = productId,
+                    isSubscription = isSub,
+                    verificationSource = verificationSource,
+                    vipExpiryOverrideMs = vipExpiryOverride
+                )
+
+                if (isNonConsumable) _hasRemovedAds.value = true
+                if (isSub) _isVipActive.value = true
+            }
+
+            // Acknowledge non-consumables/subs OR consume consumables AFTER entitlement recorded
+            completeAcknowledgeOrConsume(purchase)
+            if (ctx != null) {
+                markTokenProcessed(ctx, token)
+            }
+
+            withContext(Dispatchers.Main) {
+                _purchasedProductIds.value = _purchasedProductIds.value + purchase.products
+                onPurchaseCompleted?.invoke(primarySku, primaryIsSub)
+            }
+            _billingState.value = BillingUiState.Success(primarySku, primaryIsSub, verifiedByServer)
+        }
+    }
+
+    private suspend fun completeAcknowledgeOrConsume(purchase: Purchase) {
+        val client = billingClient ?: return
+        val hasSubscriptionOrNonConsumable = purchase.products.any {
+            it in ALL_SUBSCRIPTION_SKUS || it == PRODUCT_REMOVE_ADS
+        }
+        if (hasSubscriptionOrNonConsumable) {
+            if (!purchase.isAcknowledged) {
+                val ackParams = AcknowledgePurchaseParams.newBuilder()
+                    .setPurchaseToken(purchase.purchaseToken)
+                    .build()
+                val res = client.acknowledgePurchase(ackParams)
+                Log.i(TAG, "AcknowledgePurchase result=${res.responseCode} for ${purchase.products}")
+            }
+        } else {
+            val consumeParams = ConsumeParams.newBuilder()
+                .setPurchaseToken(purchase.purchaseToken)
+                .build()
+            val res = client.consumePurchase(consumeParams)
+            Log.i(TAG, "ConsumePurchase result=${res.billingResult.responseCode} for ${purchase.products}")
         }
     }
 
     /**
-     * Query existing active purchases to restore on startup or upon user tapping "Restore Purchases".
-     * Includes active subscription verification and revoked subscription handling.
+     * Queries active INAPP and SUBS purchases from Google Play, acknowledges unacknowledged items,
+     * processes any interrupted purchases, and revokes expired/cancelled VIP status if Play reports inactive.
      */
-    fun queryAndRestorePurchases(onComplete: ((success: Boolean, restoredProducts: List<String>) -> Unit)? = null) {
-        val client = billingClient ?: return
-        if (!isConnected) {
-            startConnection {
-                queryAndRestorePurchases(onComplete)
-            }
-            return
-        }
-
+    fun queryAndRestorePurchases(
+        onComplete: ((success: Boolean, restoredProducts: List<String>) -> Unit)? = null
+    ) {
         scope.launch {
-            val restored = mutableListOf<String>()
+            if (!ensureConnected()) {
+                withContext(Dispatchers.Main) {
+                    onComplete?.invoke(false, emptyList())
+                }
+                return@launch
+            }
+            val client = billingClient ?: run {
+                withContext(Dispatchers.Main) { onComplete?.invoke(false, emptyList()) }
+                return@launch
+            }
 
-            // 1. Check active in-app non-consumables (e.g. Remove Ads)
+            val restored = mutableListOf<String>()
+            var hasActiveRemoveAds = false
+            var hasActiveVipSub = false
+            var activeVipProductId: String? = null
+
+            // 1. Query non-consumables and unconsumed in-app products
             val inAppResult = client.queryPurchasesAsync(
                 QueryPurchasesParams.newBuilder()
                     .setProductType(BillingClient.ProductType.INAPP)
                     .build()
             )
-            var hasActiveRemoveAds = false
             if (inAppResult.billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                for (p in inAppResult.purchasesList) {
-                    if (p.purchaseState == Purchase.PurchaseState.PURCHASED) {
-                        restored.addAll(p.products)
-                        if (p.products.contains(PRODUCT_REMOVE_ADS)) {
-                            hasActiveRemoveAds = true
+                for (purchase in inAppResult.purchasesList) {
+                    when (purchase.purchaseState) {
+                        Purchase.PurchaseState.PURCHASED -> {
+                            restored.addAll(purchase.products)
+                            if (purchase.products.contains(PRODUCT_REMOVE_ADS)) {
+                                hasActiveRemoveAds = true
+                            }
+                            handlePurchase(purchase)
+                        }
+                        Purchase.PurchaseState.PENDING -> {
+                            val sku = purchase.products.firstOrNull() ?: continue
+                            userRepository?.recordPendingPurchase(
+                                purchase.purchaseToken,
+                                purchase.orderId ?: "GPA.PENDING",
+                                sku,
+                                isSubscription = false
+                            )
                         }
                     }
                 }
             }
             _hasRemovedAds.value = hasActiveRemoveAds
 
-            // 2. Check active subscriptions (e.g. VIP Monthly) — handles expiration & revocation
+            // 2. Query active VIP subscriptions
             val subsResult = client.queryPurchasesAsync(
                 QueryPurchasesParams.newBuilder()
                     .setProductType(BillingClient.ProductType.SUBS)
                     .build()
             )
-            var hasActiveVip = false
             if (subsResult.billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                for (p in subsResult.purchasesList) {
-                    if (p.purchaseState == Purchase.PurchaseState.PURCHASED) {
-                        restored.addAll(p.products)
-                        if (p.products.contains(PRODUCT_VIP_MONTHLY)) {
-                            hasActiveVip = true
+                for (purchase in subsResult.purchasesList) {
+                    if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+                        restored.addAll(purchase.products)
+                        val matchedSub = purchase.products.firstOrNull { it in ALL_SUBSCRIPTION_SKUS }
+                        if (matchedSub != null) {
+                            hasActiveVipSub = true
+                            activeVipProductId = matchedSub
                         }
+                        handlePurchase(purchase)
                     }
                 }
             }
-            _isVipActive.value = hasActiveVip
+            _isVipActive.value = hasActiveVipSub
+
+            // Reconcile persisted entitlement flags in Room
+            if (inAppResult.billingResult.responseCode == BillingClient.BillingResponseCode.OK &&
+                subsResult.billingResult.responseCode == BillingClient.BillingResponseCode.OK
+            ) {
+                userRepository?.reconcilePlayEntitlements(
+                    hasActiveVipSub = hasActiveVipSub,
+                    vipSubProductId = activeVipProductId,
+                    hasActiveRemoveAds = hasActiveRemoveAds
+                )
+            }
 
             withContext(Dispatchers.Main) {
                 _purchasedProductIds.value = _purchasedProductIds.value + restored
-                onComplete?.invoke(true, restored)
+                onComplete?.invoke(true, restored.distinct())
             }
+        }
+    }
+
+    private fun explainBillingCode(code: Int, debugMsg: String = ""): String {
+        return when (code) {
+            BillingClient.BillingResponseCode.BILLING_UNAVAILABLE ->
+                "Google Play Billing is unavailable on this device. Ensure the Play Store app is updated and a Google account is signed in."
+            BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE,
+            BillingClient.BillingResponseCode.SERVICE_DISCONNECTED,
+            BillingClient.BillingResponseCode.NETWORK_ERROR ->
+                "Unable to reach Google Play Store. Please check your internet connection and tap Retry."
+            BillingClient.BillingResponseCode.ITEM_UNAVAILABLE ->
+                "This item is not yet active or available in your Play Store region ($debugMsg)."
+            BillingClient.BillingResponseCode.DEVELOPER_ERROR ->
+                "Play Billing configuration error ($debugMsg). Please verify app signing and Play Console product setup."
+            BillingClient.BillingResponseCode.USER_CANCELED ->
+                "Purchase was cancelled."
+            else ->
+                "Google Play checkout could not be completed (Code $code). ${debugMsg.ifBlank { "Please try again." }}"
         }
     }
 }

@@ -28,6 +28,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +44,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -71,10 +74,23 @@ fun LuckyWheelDialog(
     onClaimReward: (Int, (Pair<String, Int>) -> Unit) -> Unit,
     onGrantFreeSpin: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val resolvedActivity = remember(activity, context) {
+        activity ?: run {
+            var cur: android.content.Context? = context
+            while (cur is android.content.ContextWrapper) {
+                if (cur is Activity) return@run cur
+                cur = cur.baseContext
+            }
+            null
+        }
+    }
+
     val coroutineScope = rememberCoroutineScope()
     var isSpinning by remember { mutableStateOf(false) }
     var wonRewardText by remember { mutableStateOf<String?>(null) }
     val rotationAngle = remember { Animatable(0f) }
+    val isAdLoading by AdManager.isAdLoading.collectAsState()
 
     val prizes = remember {
         listOf(
@@ -94,7 +110,7 @@ fun LuckyWheelDialog(
     Dialog(onDismissRequest = { if (!isSpinning) onDismiss() }) {
         Card(
             shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF211438).copy(alpha = 0.94f)),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF211438).copy(alpha = 0.96f)),
             modifier = Modifier
                 .fillMaxWidth()
                 .border(
@@ -105,7 +121,7 @@ fun LuckyWheelDialog(
                 .padding(4.dp)
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier.padding(18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Header
@@ -117,13 +133,13 @@ fun LuckyWheelDialog(
                     Column {
                         Text(
                             text = "🎡 LUCKY BONBON WHEEL",
-                            fontSize = 20.sp,
+                            fontSize = 19.sp,
                             fontWeight = FontWeight.Black,
                             color = Color(0xFFFFD54F)
                         )
                         Text(
-                            text = if (canSpinFree) "Free Daily Spin Ready!" else "Watch Ad for Extra Spin (No real money required)",
-                            fontSize = 12.sp,
+                            text = if (canSpinFree) "Free Daily Spin Ready!" else "Watch Ad for Extra Spin (No real money)",
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color.White.copy(alpha = 0.7f)
                         )
@@ -145,17 +161,51 @@ fun LuckyWheelDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // Prominent Player Coins & Gems Balance Section
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFF140B22),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFFFD54F)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp, bottom = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 7.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("🟡", fontSize = 18.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Column {
+                                Text("YOUR COINS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD54F).copy(alpha = 0.8f))
+                                Text("${profile.coins}", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFFFD54F))
+                            }
+                        }
+                        Box(modifier = Modifier.width(1.dp).height(24.dp).background(Color.White.copy(alpha = 0.2f)))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("💎", fontSize = 18.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Column {
+                                Text("YOUR GEMS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF80D8FF).copy(alpha = 0.8f))
+                                Text("${profile.diamonds}", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF80D8FF))
+                            }
+                        }
+                    }
+                }
 
                 // Wheel Container with Top Pointer
                 Box(
-                    modifier = Modifier.size(240.dp),
+                    modifier = Modifier.size(230.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     // Rotating Wheel
                     Canvas(
                         modifier = Modifier
-                            .size(220.dp)
+                            .size(215.dp)
                             .rotate(rotationAngle.value)
                     ) {
                         val radius = size.width / 2f
@@ -175,7 +225,7 @@ fun LuckyWheelDialog(
 
                             // Wedge border
                             drawArc(
-                                color = Color.White.copy(alpha = 0.4f),
+                                color = Color.White.copy(alpha = 0.45f),
                                 startAngle = startAngle,
                                 sweepAngle = wedgeAngle,
                                 useCenter = true,
@@ -199,12 +249,42 @@ fun LuckyWheelDialog(
                             color = Color(0xFFFF4081),
                             radius = 20.dp.toPx()
                         )
+
+                        // Draw Emoji and Prize labels on each slice
+                        drawIntoCanvas { canvas ->
+                            val nativeCanvas = canvas.nativeCanvas
+                            val textPaint = android.graphics.Paint().apply {
+                                color = android.graphics.Color.WHITE
+                                textSize = 9.sp.toPx()
+                                isFakeBoldText = true
+                                textAlign = android.graphics.Paint.Align.CENTER
+                                setShadowLayer(4f, 0f, 2f, android.graphics.Color.BLACK)
+                            }
+                            val emojiPaint = android.graphics.Paint().apply {
+                                textSize = 15.sp.toPx()
+                                textAlign = android.graphics.Paint.Align.CENTER
+                            }
+
+                            for (i in prizes.indices) {
+                                val midAngle = i * wedgeAngle - 90f
+                                val rad = Math.toRadians(midAngle.toDouble())
+                                val dist = radius * 0.65f
+                                val cx = (radius + dist * cos(rad)).toFloat()
+                                val cy = (radius + dist * sin(rad)).toFloat()
+
+                                nativeCanvas.save()
+                                nativeCanvas.rotate(midAngle + 90f, cx, cy)
+                                nativeCanvas.drawText(prizes[i].emoji, cx, cy - 2f, emojiPaint)
+                                nativeCanvas.drawText(prizes[i].name.split(" ").firstOrNull() ?: "", cx, cy + 14f, textPaint)
+                                nativeCanvas.restore()
+                            }
+                        }
                     }
 
                     // Static Top Needle Pointer pointing down into the wheel
                     Canvas(
                         modifier = Modifier
-                            .size(32.dp)
+                            .size(30.dp)
                             .align(Alignment.TopCenter)
                     ) {
                         val path = Path().apply {
@@ -225,7 +305,32 @@ fun LuckyWheelDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // Prizes Grid Summary (Coins & Items clearly visible)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🟡 250 Coins", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD54F))
+                        Text("💰 500 Coins", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFB300))
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("💎 10 Gems", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF40C4FF))
+                        Text("🔨 Hammer", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF5252))
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🔄 +2 Moves", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF69F0AE))
+                        Text("💥 Blast", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE040FB))
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("♾️ Inf Lives", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF4081))
+                        Text("🔀 2 Shuffles", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7C4DFF))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
 
                 // Result announcement
                 wonRewardText?.let { reward ->
@@ -245,7 +350,7 @@ fun LuckyWheelDialog(
                             color = Color(0xFFFFD54F)
                         )
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
                 // Action Buttons
@@ -256,8 +361,6 @@ fun LuckyWheelDialog(
                         SoundManager.playButtonClick()
                         coroutineScope.launch {
                             val prizeIdx = Random.nextInt(prizes.size)
-                            // 8 wedges = 45 deg per wedge
-                            // Target wedge center angle at top: index * 45 deg
                             val extraFullSpins = 5 + Random.nextInt(3)
                             val targetAngle = (extraFullSpins * 360f) + (prizeIdx * 45f)
                             
@@ -279,22 +382,22 @@ fun LuckyWheelDialog(
                     }
                 }
 
-                // Drop Odds Disclosure (Play Store Gambling & Loot Box Policy Transparency)
+                // Drop Odds Disclosure
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = Color.White.copy(alpha = 0.08f),
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
                 ) {
-                    Column(modifier = Modifier.padding(8.dp)) {
+                    Column(modifier = Modifier.padding(6.dp)) {
                         Text(
                             text = "🎁 Transparent Drop Odds:",
-                            fontSize = 10.sp,
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFFFD54F)
                         )
                         Text(
                             text = "250 Coins: 30% • 10 Gems: 15% • Hammer: 15% • +2 Moves: 15% • 500 Coins: 10% • Color Blast: 5% • 1h Inf Lives: 5% • 2 Shuffles: 5%",
-                            fontSize = 9.sp,
+                            fontSize = 8.5.sp,
                             color = Color.White.copy(alpha = 0.75f),
                             lineHeight = 11.sp
                         )
@@ -307,8 +410,8 @@ fun LuckyWheelDialog(
                         enabled = !isSpinning,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp),
-                        shape = RoundedCornerShape(25.dp),
+                            .height(48.dp),
+                        shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFFFF4081),
                             disabledContainerColor = Color.Gray
@@ -316,7 +419,7 @@ fun LuckyWheelDialog(
                     ) {
                         Text(
                             text = if (isSpinning) "SPINNING... 🌀" else "FREE SPIN (${profile.freeLuckySpinsCount}) 🎲",
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Black,
                             color = Color.White
                         )
@@ -324,37 +427,53 @@ fun LuckyWheelDialog(
                 } else {
                     Button(
                         onClick = {
-                            if (!isSpinning) {
-                                activity?.let { act ->
+                            if (!isSpinning && !isAdLoading) {
+                                val act = resolvedActivity ?: com.example.auth.GoogleAuthManager.findActivity(context)
+                                val unavailableMsg = context.getString(com.example.R.string.bonbon_ad_unavailable)
+                                if (act != null) {
                                     AdManager.showRewarded(
                                         activity = act,
                                         onRewardEarned = {
                                             onGrantFreeSpin()
                                             startSpin()
+                                        },
+                                        onUnavailable = {
+                                            android.widget.Toast.makeText(context, unavailableMsg, android.widget.Toast.LENGTH_SHORT).show()
                                         }
                                     )
-                                } ?: run {
-                                    onGrantFreeSpin()
-                                    startSpin()
+                                } else {
+                                    android.widget.Toast.makeText(context, unavailableMsg, android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             }
                         },
                         enabled = !isSpinning,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp),
-                        shape = RoundedCornerShape(25.dp),
+                            .height(48.dp),
+                        shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF7C4DFF),
                             disabledContainerColor = Color.Gray
                         )
                     ) {
-                        Text(
-                            text = if (isSpinning) "SPINNING... 🌀" else "📺 WATCH AD FOR EXTRA SPIN",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color.White
-                        )
+                        if (isAdLoading) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    color = Color.White,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("LOADING AD... 🎬", fontSize = 14.sp, fontWeight = FontWeight.Black, color = Color.White)
+                            }
+                        } else {
+                            Text(
+                                text = if (isSpinning) "SPINNING... 🌀" else "📺 WATCH AD FOR EXTRA SPIN",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
             }

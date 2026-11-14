@@ -762,18 +762,24 @@ fun LevelPreviewDialog(
                             Text("Refill 5 ❤️ (100 🟡)", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
 
+                        val previewContext = LocalContext.current
+                        val previewAdMsg = previewContext.getString(com.example.R.string.bonbon_ad_unavailable)
                         Button(
                             onClick = {
-                                activity?.let { act ->
+                                val act = activity ?: com.example.auth.GoogleAuthManager.findActivity(previewContext)
+                                if (act != null) {
                                     AdManager.showRewarded(
                                         activity = act,
                                         onRewardEarned = {
                                             SoundManager.playLevelWin()
                                             onRefillLivesFree()
+                                        },
+                                        onUnavailable = {
+                                            android.widget.Toast.makeText(previewContext, previewAdMsg, android.widget.Toast.LENGTH_SHORT).show()
                                         }
                                     )
-                                } ?: run {
-                                    onRefillLivesFree()
+                                } else {
+                                    android.widget.Toast.makeText(previewContext, previewAdMsg, android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             },
                             modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -851,24 +857,32 @@ fun ShopDialog(
                             color = Color(0xFF6A1B9A)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
+                        val shopContext = LocalContext.current
+                        val shopAdMsg = shopContext.getString(com.example.R.string.bonbon_ad_unavailable)
+                        fun showAdReward(onEarned: () -> Unit) {
+                            val act = activity ?: com.example.auth.GoogleAuthManager.findActivity(shopContext)
+                            if (act != null) {
+                                AdManager.showRewarded(
+                                    activity = act,
+                                    onRewardEarned = {
+                                        SoundManager.playLevelWin()
+                                        onEarned()
+                                    },
+                                    onUnavailable = {
+                                        android.widget.Toast.makeText(shopContext, shopAdMsg, android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            } else {
+                                android.widget.Toast.makeText(shopContext, shopAdMsg, android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
-                                onClick = {
-                                    activity?.let { act ->
-                                        AdManager.showRewarded(
-                                            activity = act,
-                                            onRewardEarned = {
-                                                SoundManager.playLevelWin()
-                                                onAddFreeCoins(150)
-                                            }
-                                        )
-                                    } ?: run {
-                                        onAddFreeCoins(150)
-                                    }
-                                },
+                                onClick = { showAdReward { onAddFreeCoins(150) } },
                                 modifier = Modifier.weight(1f).height(42.dp),
                                 shape = RoundedCornerShape(21.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB300))
@@ -877,19 +891,7 @@ fun ShopDialog(
                             }
 
                             Button(
-                                onClick = {
-                                    activity?.let { act ->
-                                        AdManager.showRewarded(
-                                            activity = act,
-                                            onRewardEarned = {
-                                                SoundManager.playLevelWin()
-                                                onRefillLivesFree()
-                                            }
-                                        )
-                                    } ?: run {
-                                        onRefillLivesFree()
-                                    }
-                                },
+                                onClick = { showAdReward { onRefillLivesFree() } },
                                 modifier = Modifier.weight(1f).height(42.dp),
                                 shape = RoundedCornerShape(21.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63))
@@ -905,19 +907,7 @@ fun ShopDialog(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
-                                onClick = {
-                                    activity?.let { act ->
-                                        AdManager.showRewarded(
-                                            activity = act,
-                                            onRewardEarned = {
-                                                SoundManager.playLevelWin()
-                                                onGrantFreeReward(BoosterType.Hammer)
-                                            }
-                                        )
-                                    } ?: run {
-                                        onGrantFreeReward(BoosterType.Hammer)
-                                    }
-                                },
+                                onClick = { showAdReward { onGrantFreeReward(BoosterType.Hammer) } },
                                 modifier = Modifier.weight(1f).height(42.dp),
                                 shape = RoundedCornerShape(21.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7E57C2))
@@ -926,19 +916,7 @@ fun ShopDialog(
                             }
 
                             Button(
-                                onClick = {
-                                    activity?.let { act ->
-                                        AdManager.showRewarded(
-                                            activity = act,
-                                            onRewardEarned = {
-                                                SoundManager.playLevelWin()
-                                                onGrantFreeReward(BoosterType.ColorBlast)
-                                            }
-                                        )
-                                    } ?: run {
-                                        onGrantFreeReward(BoosterType.ColorBlast)
-                                    }
-                                },
+                                onClick = { showAdReward { onGrantFreeReward(BoosterType.ColorBlast) } },
                                 modifier = Modifier.weight(1f).height(42.dp),
                                 shape = RoundedCornerShape(21.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF26A69A))

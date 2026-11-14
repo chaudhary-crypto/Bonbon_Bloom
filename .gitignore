@@ -17,12 +17,10 @@ local.properties
 .env
 debug.keystore
 debug.keystore.base64
-*.apk
-*.aab
-*.jks
-my-upload-key.jks
 .aistudio/
 .build-outputs/
 node_modules/
 functions/node_modules/
 functions/lib/
+*-debug.log
+

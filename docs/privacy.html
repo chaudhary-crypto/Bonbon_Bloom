@@ -43,10 +43,6 @@
             font-size: 20px;
             margin-top: 28px;
         }
-        h3 {
-            color: var(--accent);
-            font-size: 16px;
-        }
         p, li {
             font-size: 15px;
             color: var(--text-main);
@@ -80,47 +76,49 @@
 </head>
 <body>
     <div class="container">
-        <span class="badge">Google Play Data Safety Compliant</span>
+        <span class="badge">Google Play Data Safety &amp; GDPR / CCPA / DPDP Compliant</span>
         <h1>Privacy Policy for Bonbon Bloom</h1>
-        <p><strong>Last Updated:</strong> October 2026</p>
+        <p><strong>Last Updated:</strong> November 2026</p>
 
-        <p>Welcome to <strong>Bonbon Bloom</strong>! This Privacy Policy describes how our match-3 puzzle game collects, uses, and protects your information.</p>
+        <p>Welcome to <strong>Bonbon Bloom</strong>, operated by <strong>Novaro Technologies</strong>. This Privacy Policy describes how our puzzle game collects, processes, stores, and protects your data when you play offline or sign in for cloud save and purchases.</p>
 
-        <h2>1. Offline-First Privacy Architecture</h2>
-        <p>Bonbon Bloom is engineered to be completely playable offline. We believe in privacy by default: your game saves, level progression, stars, high scores, coins, gems, and inventory stay securely on your physical device.</p>
+        <h2>1. Offline Guest Play vs. Cloud Sign-In</h2>
+        <p>You can play Bonbon Bloom as an offline Guest, storing progression and settings locally inside an encrypted-signature Room SQLite database on your device. If you choose to sign in using <strong>Google Sign-In (Android Credential Manager)</strong>, your profile, level progress, and verified purchases synchronize over TLS with Google Cloud Firestore.</p>
 
-        <h2>2. Information Stored Locally on Your Device</h2>
+        <h2>2. Data Stored &amp; Processed</h2>
         <ul>
-            <li><strong>Game Progress & Inventory:</strong> Completed levels (1–1,000), star ratings, booster counts, streak progress, and settings preferences (audio, music, haptics, colorblind mode).</li>
-            <li><strong>Anti-Tamper Integrity:</strong> Cryptographic HMAC-SHA256 checksums to verify balance integrity without transmitting user data over the internet.</li>
+            <li><strong>Account Identifiers (Optional Google Sign-In):</strong> Firebase Authentication UID, display name, Google account email address, and profile avatar URL strictly to restore your progress and verify purchase ownership across devices.</li>
+            <li><strong>Gameplay Progression &amp; Anti-Cheat Integrity:</strong> Completed levels (1–1,000), star ratings, high scores, booster counts, preferences (sound, music, haptics, language), and HMAC-SHA256 integrity signatures.</li>
+            <li><strong>In-App Purchases &amp; Subscriptions:</strong> Handled exclusively by <strong>Google Play Billing Library 8.0.0</strong>. We never receive or store credit card, UPI, or banking numbers. We process Play Order IDs, Product SKUs, and purchase tokens solely for server-side verification, fraud prevention, and entitlement restoration.</li>
+            <li><strong>Advertising &amp; Privacy Consent (AdMob + UMP):</strong> Non-paying ad-supported players may see ads served via Google Mobile Ads (AdMob), which may process Advertising ID (AAID), IP address, and diagnostic telemetry. EEA/UK/California players are shown Google's User Messaging Platform (UMP) consent form before ad requests are sent and can revise consent anytime in <em>Settings &gt; Privacy Options</em>.</li>
+            <li><strong>Local Notifications:</strong> Scheduled on-device via Android WorkManager.</li>
         </ul>
 
-        <h2>3. Third-Party Services (When Online)</h2>
-        <p>When your device is connected to the internet, the following Google Play-certified SDKs may process diagnostic or interaction data:</p>
-        <ul>
-            <li><strong>Google Mobile Ads (AdMob):</strong> Used to deliver optional banner, interstitial, and rewarded video ads. May process advertising IDs, IP addresses, and diagnostic crash data. Users in the EEA/UK can adjust consent anytime via in-game <em>Settings > Privacy Options</em>.</li>
-            <li><strong>Google Play Billing:</strong> Used to securely fulfill in-app purchases (coins, boosters, Remove Ads) and subscriptions (VIP Gold Pass) without sharing credit card numbers with us.</li>
-            <li><strong>Android WorkManager:</strong> Runs locally on your device to schedule battery-friendly notifications (e.g. lives restored, daily rewards).</li>
-        </ul>
+        <h2>3. Zero-Trust Cloud Security</h2>
+        <p>All cloud transfers are encrypted in transit via HTTPS/TLS. Firebase App Check with reCAPTCHA / Play Integrity protects backend purchase verification and database endpoints from unauthorized access.</p>
 
         <h2>4. Children's Privacy</h2>
-        <p>Bonbon Bloom is rated for a <strong>General Audience (Ages 13 and older)</strong>. We do not knowingly collect personal identifiable information from children under 13.</p>
+        <p>Bonbon Bloom is intended for a <strong>General Audience (Ages 13 and older)</strong> and is not directed to children under 13 (or applicable age of digital consent under GDPR/DPDP). We do not knowingly collect personal data from children.</p>
 
-        <h2>5. User Rights & Data Deletion ("Delete My Data")</h2>
-        <p>You have full ownership of your data. You can erase all locally stored data, balances, and achievements at any time directly in the game by going to <strong>Settings &gt; Delete My Data</strong>.</p>
-
-        <h2>6. Links to Third-Party Policies</h2>
+        <h2>5. Your Rights &amp; Permanent Account Deletion</h2>
+        <p>You may permanently delete your account, local Room database, Cloud Firestore profile, purchase ledger associations, and Firebase Authentication credentials at any time:</p>
         <ul>
-            <li><a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a></li>
-            <li><a href="https://policies.google.com/technologies/ads" target="_blank" rel="noopener">Google AdMob Policies & Technologies</a></li>
+            <li><strong>In-Game Instant Deletion:</strong> Open <em>Settings &gt; Delete Account &amp; Data</em>.</li>
+            <li><strong>Web Deletion Portal:</strong> Submit a request at <a href="delete-account.html">delete-account.html</a>.</li>
         </ul>
 
-        <h2>7. Contact Us</h2>
-        <p>If you have any questions or data requests regarding this Privacy Policy, please email:<br>
+        <h2>6. Third-Party Policies</h2>
+        <ul>
+            <li><a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a></li>
+            <li><a href="https://policies.google.com/technologies/ads" target="_blank" rel="noopener">Google AdMob &amp; Advertising Technologies</a></li>
+        </ul>
+
+        <h2>7. Contact Data Protection Support</h2>
+        <p>Questions, data access requests, or deletion inquiries:<br>
         <strong>Email:</strong> <a href="mailto:support@earnvero.app">support@earnvero.app</a></p>
 
         <div class="footer">
-            &copy; 2026 Bonbon Bloom. All rights reserved. &bull; <a href="terms.html">Terms of Service</a>
+            &copy; 2026 Novaro Technologies &bull; Bonbon Bloom &bull; <a href="terms.html">Terms of Service</a> &bull; <a href="delete-account.html">Delete Account</a>
         </div>
     </div>
 </body>

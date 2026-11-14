@@ -1,78 +1,91 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
 import com.example.audio.SoundManager
-import com.google.firebase.auth.FirebaseAuth
-import kotlinx.coroutines.delay
+import com.example.auth.GoogleAuthManager
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 @Composable
 fun LoginDialog(
     currentEmail: String?,
     onDismiss: () -> Unit,
-    onLoginWithGoogle: (email: String, displayName: String) -> Unit,
-    onLoginWithEmail: (email: String, displayName: String) -> Unit,
+    onLoginWithGoogle: (email: String, displayName: String, photoUrl: String?, authUid: String?) -> Unit,
     onContinueAsGuest: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val context = androidx.compose.ui.platform.LocalContext.current
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: Google / 1-Tap, 1: Email
-    var isLoading by remember { mutableStateOf(false) }
-    var loadingMessage by remember { mutableStateOf("Signing in...") }
+    val context = LocalContext.current
 
-    // Email state
-    var emailInput by remember { mutableStateOf(currentEmail ?: "") }
-    var passwordInput by remember { mutableStateOf("") }
-    var nameInput by remember { mutableStateOf("") }
-    var isSignUpMode by remember { mutableStateOf(false) }
-    var passwordVisible by remember { mutableStateOf(false) }
-    var emailErrorMessage by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+    var loadingMessage by remember { mutableStateOf("Connecting with Google...") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    fun triggerGoogleSignIn() {
+        SoundManager.playButtonClick()
+        errorMessage = null
+        isLoading = true
+        loadingMessage = "Connecting with Google..."
+
+        coroutineScope.launch {
+            val targetAct = GoogleAuthManager.findActivity(context)
+            if (targetAct == null) {
+                isLoading = false
+                errorMessage = "Unable to open Google Sign-In because the active window is unavailable."
+                return@launch
+            }
+
+            val result = GoogleAuthManager.signInWithGoogle(targetAct)
+            isLoading = false
+            if (result.isSuccess) {
+                val firebaseUser = result.getOrNull()
+                val googleEmail = firebaseUser?.email
+                if (firebaseUser == null || googleEmail.isNullOrBlank()) {
+                    errorMessage = "Google account did not return an email address. Please choose another Google account."
+                    return@launch
+                }
+                val displayName = firebaseUser.displayName?.takeIf { it.isNotBlank() }
+                    ?: googleEmail.substringBefore("@")
+                onLoginWithGoogle(
+                    googleEmail,
+                    displayName,
+                    firebaseUser.photoUrl?.toString(),
+                    firebaseUser.uid
+                )
+                SoundManager.playLevelWin()
+                onDismiss()
+            } else {
+                val err = result.exceptionOrNull()
+                errorMessage = when (err) {
+                    is GetCredentialCancellationException ->
+                        "Google Sign-In was cancelled. Tap Continue with Google to try again or play as a local Guest."
+                    is NoCredentialException ->
+                        "No Google account is signed in on this device. Add a Google account in device Settings or play as a local Guest."
+                    else ->
+                        err?.message ?: "Google Sign-In failed. Check your internet connection and Google Play Services."
+                }
+            }
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -80,15 +93,15 @@ fun LoginDialog(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1035)),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 16.dp)
+                .padding(vertical = 12.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -97,23 +110,27 @@ fun LoginDialog(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
                             shape = CircleShape,
-                            color = Color(0xFF7C4DFF).copy(alpha = 0.3f),
-                            modifier = Modifier.size(38.dp)
+                            color = Color(0xFF7C4DFF).copy(alpha = 0.35f),
+                            modifier = Modifier.size(42.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text("👤", fontSize = 20.sp)
+                                Text("🍬", fontSize = 22.sp)
                             }
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
                                 text = "Player Account",
-                                fontSize = 18.sp,
+                                fontSize = 19.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
                             )
                             Text(
-                                text = "Save progress & sync across devices",
+                                text = if (currentEmail.isNullOrBlank()) {
+                                    "Cloud backup & cross-device sync"
+                                } else {
+                                    "Signed in: $currentEmail"
+                                },
                                 fontSize = 11.sp,
                                 color = Color(0xFFB388FF)
                             )
@@ -122,55 +139,30 @@ fun LoginDialog(
                     Surface(
                         shape = CircleShape,
                         color = Color.White.copy(alpha = 0.15f),
-                        modifier = Modifier.size(30.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
-                            modifier = Modifier.clickable(onClick = onDismiss)
+                            modifier = Modifier
+                                .clickable(onClick = onDismiss)
+                                .testTag("login_close_button")
                         ) {
                             Text("✕", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Mode Tabs
-                TabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = Color(0xFF2C164D),
-                    contentColor = Color.White,
-                    indicator = { tabPositions ->
-                        TabRowDefaults.SecondaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                            color = Color(0xFFFFD54F),
-                            height = 3.dp
-                        )
-                    }
-                ) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        text = { Text("Google Sign-In", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-                    )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = { Text("Email", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
                 if (isLoading) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(180.dp),
+                            .height(170.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = Color(0xFFFFD54F), modifier = Modifier.size(42.dp))
+                            CircularProgressIndicator(color = Color(0xFFFFD54F), modifier = Modifier.size(44.dp))
                             Spacer(modifier = Modifier.height(14.dp))
                             Text(
                                 text = loadingMessage,
@@ -181,242 +173,133 @@ fun LoginDialog(
                         }
                     }
                 } else {
-                    when (selectedTab) {
-                        0 -> {
-                            // --- Tab 0: Fast Google Sign-In ---
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFF2C164D),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Sign in with Google to enable encrypted Firestore cloud saves, restore purchases across devices, and protect your VIP subscription.",
+                                fontSize = 12.sp,
+                                color = Color(0xFFE1BEE7),
+                                lineHeight = 16.sp,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+
+                        errorMessage?.let { msg ->
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFF4A1822),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                // Google Sign-In
-                                Surface(
-                                    shape = RoundedCornerShape(24.dp),
-                                    color = Color.White,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(50.dp)
-                                        .clickable {
-                                            SoundManager.playButtonClick()
-                                            isLoading = true
-                                            loadingMessage = "Connecting with Google..."
-                                            coroutineScope.launch {
-                                                val result = com.example.auth.GoogleAuthManager.signInWithGoogle(context)
-                                                if (result.isSuccess) {
-                                                    val firebaseUser = result.getOrNull()
-                                                    if (firebaseUser != null) {
-                                                        val googleEmail = firebaseUser.email ?: ""
-                                                        val displayName = firebaseUser.displayName ?: googleEmail.substringBefore("@")
-                                                        onLoginWithGoogle(googleEmail, displayName)
-                                                        SoundManager.playLevelWin()
-                                                        onDismiss()
-                                                    }
-                                                } else {
-                                                    val ex = result.exceptionOrNull()
-                                                    val errorMsg = when (ex) {
-                                                        is androidx.credentials.exceptions.GetCredentialCancellationException ->
-                                                            "Google Sign-In was cancelled."
-                                                        is androidx.credentials.exceptions.NoCredentialException ->
-                                                            "No Google account found on device. Please sign in with Email below or add an account in device Settings."
-                                                        else ->
-                                                            "Google Sign-In was unavailable (${ex?.localizedMessage ?: "check connection"}). Please use Email below."
-                                                    }
-                                                    emailErrorMessage = errorMsg
-                                                    selectedTab = 1
-                                                }
-                                                isLoading = false
-                                            }
-                                        }
-
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Text("🌐", fontSize = 20.sp)
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Text(
-                                            text = "Continue with Google",
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF1F1F1F)
-                                        )
-                                    }
-                                }
-
                                 Text(
-                                    text = "✓ Automatic cloud save & cross-device progress backup",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF81C784),
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth()
+                                    text = msg,
+                                    color = Color(0xFFFF8A80),
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    modifier = Modifier.padding(10.dp)
                                 )
-
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                // Guest Mode Button
-                                TextButton(
-                                    onClick = {
-                                        SoundManager.playButtonClick()
-                                        onContinueAsGuest()
-                                        onDismiss()
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = "🎮 Play as Guest (Save locally on this device)",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFFCE93D8)
-                                    )
-                                }
                             }
                         }
-                        1 -> {
-                            // --- Tab 1: Email Sign-In ---
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+
+                        Surface(
+                            shape = RoundedCornerShape(22.dp),
+                            color = Color.White,
+                            shadowElevation = 4.dp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .testTag("google_sign_in_button")
+                                .clickable { triggerGoogleSignIn() }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
                             ) {
-                                if (isSignUpMode) {
-                                    OutlinedTextField(
-                                        value = nameInput,
-                                        onValueChange = { nameInput = it },
-                                        label = { Text("Display Name", color = Color(0xFFCE93D8)) },
-                                        singleLine = true,
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = Color(0xFFFFD54F),
-                                            unfocusedBorderColor = Color(0xFF7C4DFF),
-                                            focusedTextColor = Color.White,
-                                            unfocusedTextColor = Color.White
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-
-                                OutlinedTextField(
-                                    value = emailInput,
-                                    onValueChange = {
-                                        emailInput = it
-                                        emailErrorMessage = null
-                                    },
-                                    label = { Text("Email Address", color = Color(0xFFCE93D8)) },
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = Color(0xFFFFD54F),
-                                        unfocusedBorderColor = Color(0xFF7C4DFF),
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White
-                                    ),
-                                    modifier = Modifier.fillMaxWidth()
+                                Text("🌐", fontSize = 20.sp)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = if (errorMessage != null) "Retry Google Sign-In" else "Continue with Google",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1F1F1F)
                                 )
+                            }
+                        }
 
-                                OutlinedTextField(
-                                    value = passwordInput,
-                                    onValueChange = {
-                                        passwordInput = it
-                                        emailErrorMessage = null
-                                    },
-                                    label = { Text("Password", color = Color(0xFFCE93D8)) },
-                                    singleLine = true,
-                                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                                    trailingIcon = {
-                                        Text(
-                                            text = if (passwordVisible) "👁️" else "🔒",
-                                            modifier = Modifier.clickable { passwordVisible = !passwordVisible }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            HorizontalDivider(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.2f))
+                            Text(
+                                text = "  OR  ",
+                                color = Color.White.copy(alpha = 0.6f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            HorizontalDivider(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.2f))
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(22.dp),
+                            color = Color(0xFF7C4DFF),
+                            shadowElevation = 6.dp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .testTag("guest_play_button")
+                                .clickable {
+                                    SoundManager.playButtonClick()
+                                    onContinueAsGuest()
+                                    onDismiss()
+                                }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(Color(0xFF8E24AA), Color(0xFFE91E63))
                                         )
-                                    },
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = Color(0xFFFFD54F),
-                                        unfocusedBorderColor = Color(0xFF7C4DFF),
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White
                                     ),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                emailErrorMessage?.let { err ->
-                                    Text(text = err, color = Color(0xFFFF5252), fontSize = 12.sp)
-                                }
-
-                                Button(
-                                    onClick = {
-                                        val trimmedEmail = emailInput.trim()
-                                        if (trimmedEmail.isBlank() || !trimmedEmail.contains("@")) {
-                                            emailErrorMessage = "Please enter a valid email address."
-                                            return@Button
-                                        }
-                                        if (passwordInput.length < 6) {
-                                            emailErrorMessage = "Password must be at least 6 characters."
-                                            return@Button
-                                        }
-                                        SoundManager.playButtonClick()
-                                        isLoading = true
-                                        loadingMessage = if (isSignUpMode) "Creating account..." else "Signing in..."
-                                        coroutineScope.launch {
-                                            try {
-                                                val auth = FirebaseAuth.getInstance()
-                                                val authResult = if (isSignUpMode) {
-                                                    auth.createUserWithEmailAndPassword(trimmedEmail, passwordInput).await()
-                                                } else {
-                                                    auth.signInWithEmailAndPassword(trimmedEmail, passwordInput).await()
-                                                }
-                                                val user = authResult.user
-                                                val finalName = if (nameInput.isNotBlank()) nameInput.trim() else (user?.displayName ?: trimmedEmail.substringBefore("@"))
-                                                onLoginWithEmail(trimmedEmail, finalName)
-                                                SoundManager.playLevelWin()
-                                                isLoading = false
-                                                onDismiss()
-                                            } catch (e: Exception) {
-                                                isLoading = false
-                                                emailErrorMessage = when {
-                                                    e.message?.contains("password", ignoreCase = true) == true ->
-                                                        "Incorrect password or password too weak (min 6 characters)."
-                                                    e.message?.contains("already in use", ignoreCase = true) == true ->
-                                                        "This email is already registered. Please tap 'Already have an account? Sign In'."
-                                                    e.message?.contains("no user record", ignoreCase = true) == true || e.message?.contains("user-not-found", ignoreCase = true) == true ->
-                                                        "No account found with this email. Tap 'Create an account' below."
-                                                    e.message?.contains("network", ignoreCase = true) == true ->
-                                                        "Network connection error. Please check your internet connection."
-                                                    else ->
-                                                        e.localizedMessage ?: "Authentication failed. Please check credentials."
-                                                }
-                                            }
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(22.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
-                                    modifier = Modifier.fillMaxWidth().height(46.dp)
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
                                 ) {
+                                    Text("⚡", fontSize = 20.sp)
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = if (isSignUpMode) "Create Account" else "Sign In with Email",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        text = "Play as Guest (Local Only)",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Black,
                                         color = Color.White
                                     )
                                 }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    TextButton(onClick = { isSignUpMode = !isSignUpMode }) {
-                                        Text(
-                                            text = if (isSignUpMode) "Already have an account? Sign In" else "New player? Create an account",
-                                            fontSize = 12.sp,
-                                            color = Color(0xFFFFD54F)
-                                        )
-                                    }
-                                }
                             }
                         }
+
+                        Text(
+                            text = "Guest progress stays on this device only. Cloud backup & cross-device VIP sync require Google Sign-In.",
+                            fontSize = 11.sp,
+                            color = Color(0xFFB388FF),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -426,7 +309,7 @@ fun LoginDialog(
                     Text("🛡️", fontSize = 12.sp)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Encrypted Cloud Storage • Fair Play Protected",
+                        text = "Credential Manager Secured • Fair Play Protected",
                         fontSize = 10.sp,
                         color = Color.Gray
                     )

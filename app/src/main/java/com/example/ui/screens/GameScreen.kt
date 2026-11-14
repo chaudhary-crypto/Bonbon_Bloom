@@ -124,7 +124,14 @@ fun GameScreen(
     var showInGameShopDialog by remember { mutableStateOf(false) }
     var inGameShopTab by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val context = LocalContext.current
-    val activity = context as? Activity
+    val activity = remember(context) {
+        var cur: android.content.Context? = context
+        while (cur is android.content.ContextWrapper) {
+            if (cur is Activity) return@remember cur
+            cur = cur.baseContext
+        }
+        null
+    }
 
     LaunchedEffect(gameState, movesLeft) {
         if (gameState == GameState.LevelComplete && !showWinDialogHandled) {
@@ -1128,20 +1135,25 @@ fun LevelWinDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (!hasClaimedDouble) {
+                    val winContext = LocalContext.current
+                    val adUnavailableMsg = winContext.getString(R.string.bonbon_ad_unavailable)
                     Button(
                         onClick = {
-                            activity?.let { act ->
+                            val act = activity ?: com.example.auth.GoogleAuthManager.findActivity(winContext)
+                            if (act != null) {
                                 AdManager.showRewarded(
                                     activity = act,
                                     onRewardEarned = {
                                         SoundManager.playLevelWin()
                                         onDoubleCoins(bonusCoins)
                                         hasClaimedDouble = true
+                                    },
+                                    onUnavailable = {
+                                        android.widget.Toast.makeText(winContext, adUnavailableMsg, android.widget.Toast.LENGTH_SHORT).show()
                                     }
                                 )
-                            } ?: run {
-                                onDoubleCoins(bonusCoins)
-                                hasClaimedDouble = true
+                            } else {
+                                android.widget.Toast.makeText(winContext, adUnavailableMsg, android.widget.Toast.LENGTH_SHORT).show()
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -1238,18 +1250,24 @@ fun LevelGameOverDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Watch Ad for Free Moves
+                val overContext = LocalContext.current
+                val overAdUnavailable = overContext.getString(R.string.bonbon_ad_unavailable)
                 Button(
                     onClick = {
-                        activity?.let { act ->
+                        val act = activity ?: com.example.auth.GoogleAuthManager.findActivity(overContext)
+                        if (act != null) {
                             AdManager.showRewarded(
                                 activity = act,
                                 onRewardEarned = {
                                     SoundManager.playLevelWin()
                                     onWatchAdForFreeMoves()
+                                },
+                                onUnavailable = {
+                                    android.widget.Toast.makeText(overContext, overAdUnavailable, android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             )
-                        } ?: run {
-                            onWatchAdForFreeMoves()
+                        } else {
+                            android.widget.Toast.makeText(overContext, overAdUnavailable, android.widget.Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),

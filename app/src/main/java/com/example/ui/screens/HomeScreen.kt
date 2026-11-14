@@ -185,7 +185,7 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (profile.isLoggedIn) profile.username else "Sign In (Google)",
+                            text = if (profile.isLoggedIn) profile.username else "Sign In / Sync",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -756,16 +756,13 @@ fun HomeScreen(
             )
         }
 
-        // Clean Login Dialog (Google, Email, Guest)
+        // Clean Login Dialog (Google Sign-In & Local Guest Mode)
         if (showLoginDialog) {
             LoginDialog(
                 currentEmail = profile.email,
                 onDismiss = { showLoginDialog = false },
-                onLoginWithGoogle = { email, name ->
-                    viewModel.loginWithGoogle(email, name)
-                },
-                onLoginWithEmail = { email, name ->
-                    viewModel.loginWithEmail(email, name)
+                onLoginWithGoogle = { email, name, photoUrl, authUid ->
+                    viewModel.loginWithGoogle(email, name, photoUrl, authUid)
                 },
                 onContinueAsGuest = {
                     showLoginDialog = false
@@ -827,15 +824,15 @@ fun HomeScreen(
                         }
                     }
                 },
-                onSecretAdminUnlocked = { viewModel.loginAsAdmin() },
-                onSandboxAddCoins = { viewModel.addCoins(5000) },
-                onSandboxAddDiamonds = { viewModel.addDiamonds(200) },
-                onSandboxRefillLives = { viewModel.refillLivesFree() },
-                onSandboxGrantInfiniteLives = { viewModel.grantInfiniteLives(2) },
-                onSandboxGrantBoosters = { viewModel.grantAllBoosters(5) },
-                onSandboxUnlockAllLevels = { viewModel.unlockLevels(1000) },
-                onSandboxRemoveAds = { viewModel.grantSandboxRemoveAds() },
-                onSandboxGrantVip = { viewModel.subscribeVip(7) }
+                onSecretAdminUnlocked = if (com.example.BuildConfig.DEBUG) ({ viewModel.loginAsAdmin() }) else null,
+                onSandboxAddCoins = if (com.example.BuildConfig.DEBUG) ({ viewModel.addCoins(5000) }) else null,
+                onSandboxAddDiamonds = if (com.example.BuildConfig.DEBUG) ({ viewModel.addDiamonds(200) }) else null,
+                onSandboxRefillLives = if (com.example.BuildConfig.DEBUG) ({ viewModel.refillLivesFree() }) else null,
+                onSandboxGrantInfiniteLives = if (com.example.BuildConfig.DEBUG) ({ viewModel.grantInfiniteLives(2) }) else null,
+                onSandboxGrantBoosters = if (com.example.BuildConfig.DEBUG) ({ viewModel.grantAllBoosters(5) }) else null,
+                onSandboxUnlockAllLevels = if (com.example.BuildConfig.DEBUG) ({ viewModel.unlockLevels(1000) }) else null,
+                onSandboxRemoveAds = if (com.example.BuildConfig.DEBUG) ({ viewModel.grantSandboxRemoveAds() }) else null,
+                onSandboxGrantVip = if (com.example.BuildConfig.DEBUG) ({ viewModel.subscribeVip(7) }) else null
             )
         }
 
@@ -965,19 +962,25 @@ fun DailyRewardDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Double with Video Ad
+                val adContext = LocalContext.current
+                val adUnavailableMsg = adContext.getString(R.string.bonbon_ad_unavailable)
                 Button(
                     onClick = {
                         SoundManager.playButtonClick()
-                        activity?.let { act ->
+                        val act = activity ?: com.example.auth.GoogleAuthManager.findActivity(adContext)
+                        if (act != null) {
                             AdManager.showRewarded(
                                 activity = act,
                                 onRewardEarned = {
                                     SoundManager.playLevelWin()
                                     onClaim(400)
+                                },
+                                onUnavailable = {
+                                    android.widget.Toast.makeText(adContext, adUnavailableMsg, android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             )
-                        } ?: run {
-                            onClaim(400)
+                        } else {
+                            android.widget.Toast.makeText(adContext, adUnavailableMsg, android.widget.Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),

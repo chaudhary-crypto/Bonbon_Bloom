@@ -1,28 +1,156 @@
 {
   "entities": {
     "UserProfile": {
-      "collection": "users",
-      "fields": {
-        "username": { "type": "string" },
-        "email": { "type": "string" },
-        "authProvider": { "type": "string" },
-        "highestUnlockedLevel": { "type": "integer" },
-        "totalStars": { "type": "integer" },
-        "coins": { "type": "integer" },
-        "diamonds": { "type": "integer" },
-        "lives": { "type": "integer" },
-        "isVipSubscribed": { "type": "boolean" },
-        "vipExpiryTimestamp": { "type": "integer" },
-        "infiniteLivesExpiryTimestamp": { "type": "integer" },
+      "title": "UserProfile",
+      "description": "Player account, progression, and server-managed currency/entitlement state.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "description": "Display name (1-64 chars)." },
+        "email": { "type": "string", "description": "Google account email." },
+        "authProvider": { "type": "string", "description": "Authentication provider (e.g. GOOGLE)." },
+        "highestUnlockedLevel": { "type": "integer", "description": "Monotonic highest unlocked level (1..1000)." },
+        "coins": { "type": "integer", "description": "Virtual coins (server-credited on IAP/SSV)." },
+        "diamonds": { "type": "integer", "description": "Virtual diamonds (server-credited on IAP)." },
+        "lives": { "type": "integer", "description": "Remaining lives (0..20)." },
         "hammerCount": { "type": "integer" },
         "shuffleCount": { "type": "integer" },
         "colorBlastCount": { "type": "integer" },
         "extraMovesCount": { "type": "integer" },
         "magicWandCount": { "type": "integer" },
         "cosmicBlastCount": { "type": "integer" },
-        "hasRemovedAds": { "type": "boolean" },
-        "lastCloudSyncTime": { "type": "integer" }
-      }
+        "isVipSubscribed": { "type": "boolean", "description": "Server-verified VIP subscription entitlement." },
+        "vipExpiryTimestamp": { "type": "integer", "description": "Epoch millis when VIP subscription expires." },
+        "hasRemovedAds": { "type": "boolean", "description": "Server-verified permanent Remove Ads entitlement." },
+        "isAdmin": { "type": "boolean", "description": "Owner/admin privilege flag (immutable to client)." },
+        "soundEnabled": { "type": "boolean" },
+        "musicEnabled": { "type": "boolean" },
+        "hapticsEnabled": { "type": "boolean" },
+        "languageCode": { "type": "string" },
+        "lastCloudSyncTime": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "ServerTimestamp set at creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "ServerTimestamp set on update." }
+      },
+      "required": [
+        "username",
+        "highestUnlockedLevel",
+        "coins",
+        "diamonds",
+        "isVipSubscribed",
+        "hasRemovedAds",
+        "isAdmin",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "LevelProgress": {
+      "title": "LevelProgress",
+      "description": "Per-level completion status, best stars, and high score.",
+      "type": "object",
+      "properties": {
+        "levelId": { "type": "integer" },
+        "stars": { "type": "integer" },
+        "highScore": { "type": "integer" },
+        "completed": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "ServerTimestamp set on upsert." }
+      },
+      "required": ["levelId", "stars", "highScore", "completed", "updatedAt"]
+    },
+    "PurchaseRecord": {
+      "title": "PurchaseRecord",
+      "description": "Server-verified Google Play Billing purchase record indexed by SHA-256 purchaseToken hash.",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "productId": { "type": "string" },
+        "purchaseTokenHash": { "type": "string" },
+        "isSubscription": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["VERIFIED", "PENDING", "CANCELLED", "REVOKED", "REJECTED"] },
+        "paymentState": { "type": "integer" },
+        "expiryTimeMillis": { "type": "integer" },
+        "verifiedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderId", "productId", "purchaseTokenHash", "status", "verifiedAt"]
+    },
+    "LedgerEntry": {
+      "title": "LedgerEntry",
+      "description": "Immutable server-written audit ledger of credited purchases and SSV rewarded ads.",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "productId": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["currency", "entitlement", "boosters", "REWARDED_AD_SSV"] },
+        "status": { "type": "string" },
+        "timestamp": { "type": "integer" }
+      },
+      "required": ["userId", "type", "status", "timestamp"]
+    },
+    "RewardRequest": {
+      "title": "RewardRequest",
+      "description": "Server-verified AdMob SSV reward audit entry.",
+      "type": "object",
+      "properties": {
+        "transactionId": { "type": "string" },
+        "amount": { "type": "integer" },
+        "verifiedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["transactionId", "amount", "verifiedAt"]
+    },
+    "DeletionRequest": {
+      "title": "DeletionRequest",
+      "description": "User-initiated GDPR / Google Play account deletion audit ticket.",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "PROCESSED"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["requestId", "status", "createdAt"]
+    },
+    "AccountDeletionRequest": {
+      "title": "AccountDeletionRequest",
+      "description": "Server-managed web deletion request queue entry.",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string" },
+        "email": { "type": "string" },
+        "username": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string" },
+        "timestamp": { "type": "integer" }
+      },
+      "required": ["requestId", "email", "status", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Player cloud save document isolated per authenticated UID."
+    },
+    "/users/{userId}/level_progress/{levelId}": {
+      "schema": { "$ref": "#/entities/LevelProgress" },
+      "description": "Completed level stars and high scores for the owning player."
+    },
+    "/users/{userId}/purchases/{purchaseId}": {
+      "schema": { "$ref": "#/entities/PurchaseRecord" },
+      "description": "Server-only verified Google Play purchase records (owner read-only)."
+    },
+    "/users/{userId}/ledger/{ledgerId}": {
+      "schema": { "$ref": "#/entities/LedgerEntry" },
+      "description": "Server-only immutable audit ledger (owner read-only)."
+    },
+    "/users/{userId}/reward_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/RewardRequest" },
+      "description": "Server-only AdMob SSV verification records (owner read-only)."
+    },
+    "/users/{userId}/deletion_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/DeletionRequest" },
+      "description": "Immutable GDPR/Play account deletion audit record created by owner."
+    },
+    "/account_deletion_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/AccountDeletionRequest" },
+      "description": "Server-only web deletion queue written by requestWebAccountDeletion."
     }
   }
 }

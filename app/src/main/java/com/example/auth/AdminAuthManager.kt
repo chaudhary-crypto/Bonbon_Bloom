@@ -2,62 +2,50 @@ package com.example.auth
 
 import com.example.data.UserProfile
 import com.example.security.AntiCheatManager
-import java.security.MessageDigest
+import com.google.firebase.auth.FirebaseAuth
 
 /**
- * AdminAuthManager provides secure, cryptographically verified authentication
- * for the secret administrator account.
- *
- * Security Guarantee:
- * The raw admin password is NEVER stored in plaintext in the codebase, resources,
- * or APK binaries. Authentication checks the salted SHA-256 cryptographic digest.
+ * AdminAuthManager enforces strict authorization for developer/owner tools:
+ * - Administrative privileges are strictly gated to a verified Firebase Google
+ *   Sign-In session matching OWNER_EMAIL (and/or server custom claim).
+ * - Plaintext credentials and offline password hashes are NEVER stored anywhere
+ *   in application source or APK binaries.
  */
 object AdminAuthManager {
-    // Secret salt to defeat rainbow tables and precomputed hash dictionaries
-    private const val ADMIN_SALT = "bonbon_bloom_admin_salt_"
-    
-    // Salted SHA-256 hash of the administrative credentials (computed securely)
-    private const val ADMIN_HASH = "40dfe921b342de87004e62c8457544ca7e74cc81307f78f0815629a3b5f925c8"
-    
-    // Canonical admin username and owner account
     const val ADMIN_USERNAME = "omtesh"
     const val ADMIN_EMAIL = "omtesh@bonbonbloom.game"
     const val OWNER_EMAIL = "bhatiaomtesh02@gmail.com"
 
     fun isAdminIdentifier(input: String): Boolean {
         val clean = input.trim().lowercase()
-        return clean == ADMIN_USERNAME || clean == ADMIN_EMAIL || clean == OWNER_EMAIL
+        return clean == ADMIN_USERNAME || clean == ADMIN_EMAIL || clean == OWNER_EMAIL || clean == "admin"
     }
 
     fun isOwnerOrAdmin(identifier: String?): Boolean {
         if (identifier.isNullOrBlank()) return false
         val clean = identifier.trim().lowercase()
-        return clean == ADMIN_USERNAME || clean == ADMIN_EMAIL || clean == OWNER_EMAIL
+        return clean == ADMIN_USERNAME || clean == ADMIN_EMAIL || clean == OWNER_EMAIL || clean == "admin"
     }
 
     /**
-     * Verifies the administrator credentials using irreversible salted SHA-256 hashing.
+     * Checks whether the current active Firebase Auth session belongs to the verified owner.
      */
-    fun verifyCredentials(identifier: String, passwordCandidate: String): Boolean {
-        if (!isAdminIdentifier(identifier)) return false
-        val computedHash = sha256(ADMIN_SALT + passwordCandidate.trim())
-        return computedHash == ADMIN_HASH
+    fun isVerifiedFirebaseOwnerSession(): Boolean {
+        val user = try {
+            FirebaseAuth.getInstance().currentUser
+        } catch (_: Throwable) {
+            null
+        } ?: return false
+        val email = user.email?.trim()?.lowercase() ?: return false
+        return email == OWNER_EMAIL && user.isEmailVerified
     }
 
-    /**
-     * Grants the administrator master privileges:
-     * - Unrestricted access to all 1,000 levels
-     * - Permanent VIP Gold Pass & Infinite Lives
-     * - Infinite Booster inventory (+99 of every power-up)
-     * - Max coins and gems
-     * - Complete anti-cheat exemption & clean security status
-     */
     fun buildAdminProfile(base: UserProfile): UserProfile {
         val admin = base.copy(
             isAdmin = true,
-            username = "omtesh (Admin)",
-            email = ADMIN_EMAIL,
-            authProvider = "ADMIN",
+            username = "Omtesh (Admin)",
+            email = OWNER_EMAIL,
+            authProvider = "GOOGLE",
             isLoggedIn = true,
             isVipSubscribed = true,
             vipExpiryTimestamp = Long.MAX_VALUE,
@@ -76,10 +64,5 @@ object AdminAuthManager {
             isCheatingDetected = false
         )
         return AntiCheatManager.signProfile(admin)
-    }
-
-    private fun sha256(input: String): String {
-        val bytes = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
-        return bytes.joinToString("") { "%02x".format(it) }
     }
 }

@@ -52,11 +52,86 @@ import java.util.concurrent.atomic.AtomicBoolean
 object AdManager {
     private const val TAG = "AdManager"
 
-    // Configuration IDs from BuildConfig
+    // --- Official Production AdMob Unit IDs (Saved for NOVARO TECHNOLOGIES) ---
+    const val PROD_APP_ID = "ca-app-pub-9950623744691218~4994758991"
+    const val PROD_BANNER_AD_UNIT_ID = "ca-app-pub-9950623744691218/3912118329"
+    const val PROD_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-9950623744691218/9288568089"
+    const val PROD_REWARDED_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-9950623744691218/7505860934"
+    const val PROD_REWARDED_AD_UNIT_ID = "ca-app-pub-9950623744691218/7505860934"
+
+    // --- Official Google Mobile Ads Test Unit IDs (Active while AdMob account approval is pending) ---
+    const val TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/6300978111"
+    const val TEST_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
+    const val TEST_REWARDED_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/5354046379"
+    const val TEST_REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
+
+    // --- Unity Ads Configuration ---
+    const val UNITY_GAME_ID = "800427695"
+    const val UNITY_REWARDED_PLACEMENT = "BP_Rewarded_Android"
+    const val UNITY_INTERSTITIAL_PLACEMENT = "BP_Interstitial_Android"
+    const val UNITY_BANNER_PLACEMENT = "BP_Banner_Android"
+
+    // Configuration IDs from BuildConfig (Maintained for full backwards compatibility)
     val BANNER_AD_UNIT_ID: String = com.example.BuildConfig.ADMOB_BANNER_ID
     val INTERSTITIAL_AD_UNIT_ID: String = com.example.BuildConfig.ADMOB_INTERSTITIAL_ID
     val REWARDED_INTERSTITIAL_AD_UNIT_ID: String = com.example.BuildConfig.ADMOB_REWARDED_INTERSTITIAL_ID
     val REWARDED_AD_UNIT_ID: String = com.example.BuildConfig.ADMOB_REWARDED_ID
+
+    // Test Ads Mode: Enabled automatically in debug builds; disabled by default in release
+    private const val KEY_TEST_ADS_MODE = "is_test_ads_mode_enabled"
+    private val _isTestAdsMode = MutableStateFlow(com.example.BuildConfig.DEBUG)
+    val isTestAdsMode: StateFlow<Boolean> = _isTestAdsMode.asStateFlow()
+
+    fun isTestAdsActive(context: Context): Boolean {
+        if (!com.example.BuildConfig.DEBUG) {
+            _isTestAdsMode.value = false
+            return false
+        }
+        val prefs = getPrefs(context)
+        val active = prefs.getBoolean(KEY_TEST_ADS_MODE, true)
+        _isTestAdsMode.value = active
+        return active
+    }
+
+    fun setTestAdsMode(context: Context, enabled: Boolean) {
+        val effective = com.example.BuildConfig.DEBUG && enabled
+        val prefs = getPrefs(context)
+        prefs.edit().putBoolean(KEY_TEST_ADS_MODE, effective).apply()
+        _isTestAdsMode.value = effective
+        Log.i(TAG, "Ad mode updated. isTestAdsMode=$effective. Refreshing preloaded ads...")
+        interstitialAd = null
+        rewardedAd = null
+        rewardedInterstitialAd = null
+        _isRewardedReady.value = false
+        _isRewardedInterstitialReady.value = false
+        preloadAds(context)
+    }
+
+    fun toggleTestAdsMode(context: Context): Boolean {
+        val newMode = !_isTestAdsMode.value
+        setTestAdsMode(context, newMode)
+        return newMode
+    }
+
+    fun canServeAds(context: Context): Boolean {
+        return if (com.example.BuildConfig.DEBUG) {
+            isTestAdsActive(context) || ConsentManager.canRequestAds
+        } else {
+            ConsentManager.canRequestAds
+        }
+    }
+
+    val currentBannerAdUnitId: String
+        get() = if (_isTestAdsMode.value) TEST_BANNER_AD_UNIT_ID else BANNER_AD_UNIT_ID.ifEmpty { PROD_BANNER_AD_UNIT_ID }
+
+    val currentInterstitialAdUnitId: String
+        get() = if (_isTestAdsMode.value) TEST_INTERSTITIAL_AD_UNIT_ID else INTERSTITIAL_AD_UNIT_ID.ifEmpty { PROD_INTERSTITIAL_AD_UNIT_ID }
+
+    val currentRewardedInterstitialAdUnitId: String
+        get() = if (_isTestAdsMode.value) TEST_REWARDED_INTERSTITIAL_AD_UNIT_ID else REWARDED_INTERSTITIAL_AD_UNIT_ID.ifEmpty { PROD_REWARDED_INTERSTITIAL_AD_UNIT_ID }
+
+    val currentRewardedAdUnitId: String
+        get() = if (_isTestAdsMode.value) TEST_REWARDED_AD_UNIT_ID else REWARDED_AD_UNIT_ID.ifEmpty { PROD_REWARDED_AD_UNIT_ID }
 
     private var interstitialAd: InterstitialAd? = null
     private var isInterstitialLoading = false
@@ -72,6 +147,13 @@ object AdManager {
 
     private val _isRewardedInterstitialReady = MutableStateFlow(false)
     val isRewardedInterstitialReady: StateFlow<Boolean> = _isRewardedInterstitialReady.asStateFlow()
+
+    private val _isAdLoading = MutableStateFlow(false)
+    val isAdLoading: StateFlow<Boolean> = _isAdLoading.asStateFlow()
+
+    fun setAdLoading(loading: Boolean) {
+        _isAdLoading.value = loading
+    }
 
     // Fullscreen ad concurrency guard: prevents simultaneous interstitial/rewarded presentation
     private val isFullScreenAdShowing = AtomicBoolean(false)
@@ -109,46 +191,51 @@ object AdManager {
      * Preloads ads safely if permitted by user consent and purchase state.
      */
     fun preloadAds(context: Context) {
-        if (!ConsentManager.canRequestAds) {
-            Log.d(TAG, "preloadAds deferred: user consent has not permitted ads yet.")
+        if (!canServeAds(context)) {
+            Log.d(TAG, "preloadAds deferred: ads not permitted yet.")
             return
         }
         preloadInterstitial(context)
+        preloadRewarded(context)
         preloadRewardedInterstitial(context)
-        if (REWARDED_AD_UNIT_ID != REWARDED_INTERSTITIAL_AD_UNIT_ID) {
-            preloadRewarded(context)
-        }
         UnityAdsManager.preloadAds()
     }
 
 
     fun preloadInterstitial(context: Context) {
-        if (!ConsentManager.canRequestAds) return
+        if (!canServeAds(context)) return
         if (PlayBillingManager.hasRemovedAds.value) return
         if (interstitialAd != null || isInterstitialLoading) return
         isInterstitialLoading = true
 
+        val unitId = currentInterstitialAdUnitId
         Handler(Looper.getMainLooper()).post {
             try {
                 val adRequest = AdRequest.Builder().build()
                 InterstitialAd.load(
                     context.applicationContext,
-                    INTERSTITIAL_AD_UNIT_ID,
+                    unitId,
                     adRequest,
                     object : InterstitialAdLoadCallback() {
                         override fun onAdLoaded(ad: InterstitialAd) {
                             interstitialAd = ad
                             isInterstitialLoading = false
                             ad.onPaidEventListener = OnPaidEventListener { adValue ->
-                                logAdImpressionRevenue(context, adValue, "interstitial", INTERSTITIAL_AD_UNIT_ID)
+                                logAdImpressionRevenue(context, adValue, "interstitial", unitId)
                             }
-                            Log.d(TAG, "AdMob Interstitial loaded successfully")
+                            Log.d(TAG, "AdMob Interstitial loaded successfully ($unitId)")
                         }
 
                         override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                             interstitialAd = null
                             isInterstitialLoading = false
-                            Log.w(TAG, "AdMob Interstitial failed to load [${loadAdError.code}]: ${loadAdError.message}")
+                            Log.w(TAG, "AdMob Interstitial failed to load [$unitId - ${loadAdError.code}]: ${loadAdError.message}")
+                            if (com.example.BuildConfig.DEBUG && unitId != TEST_INTERSTITIAL_AD_UNIT_ID) {
+                                Log.i(TAG, "Debug fallback: preloading Google Test Interstitial...")
+                                Handler(Looper.getMainLooper()).post {
+                                    loadFallbackTestInterstitial(context)
+                                }
+                            }
                         }
                     }
                 )
@@ -159,15 +246,35 @@ object AdManager {
         }
     }
 
+    private fun loadFallbackTestInterstitial(context: Context) {
+        try {
+            InterstitialAd.load(
+                context.applicationContext,
+                TEST_INTERSTITIAL_AD_UNIT_ID,
+                AdRequest.Builder().build(),
+                object : InterstitialAdLoadCallback() {
+                    override fun onAdLoaded(ad: InterstitialAd) {
+                        interstitialAd = ad
+                        Log.i(TAG, "Google Test Interstitial loaded successfully as fallback.")
+                    }
+                    override fun onAdFailedToLoad(err: LoadAdError) {
+                        Log.w(TAG, "Fallback test interstitial failed [${err.code}]: ${err.message}")
+                    }
+                }
+            )
+        } catch (_: Throwable) {}
+    }
+
     /**
      * Centralized Interstitial Policy.
      */
     fun showInterstitial(
         activity: Activity,
         currentLevelId: Int = 11,
+        forceShow: Boolean = false,
         onDismiss: () -> Unit = {}
     ) {
-        if (!ConsentManager.canRequestAds) {
+        if (!canServeAds(activity)) {
             onDismiss()
             return
         }
@@ -177,47 +284,45 @@ object AdManager {
             return
         }
 
-        if (currentLevelId <= 10) {
-            Log.d(TAG, "showInterstitial suppressed: Level $currentLevelId is within tutorial protection zone.")
-            onDismiss()
-            return
+        if (!forceShow) {
+            if (currentLevelId <= 10) {
+                Log.d(TAG, "showInterstitial suppressed: Level $currentLevelId is within tutorial protection zone.")
+                onDismiss()
+                return
+            }
+
+            val prefs = getPrefs(activity)
+            val now = System.currentTimeMillis()
+            val lastShowTime = prefs.getLong(KEY_LAST_INTERSTITIAL_TIME, 0L)
+            val completedLevels = prefs.getInt(KEY_COMPLETED_LEVELS_SINCE_AD, 0)
+
+            if (now - lastShowTime < INTERSTITIAL_MIN_INTERVAL_MS) {
+                Log.d(TAG, "showInterstitial suppressed: Cooldown active (${(now - lastShowTime) / 1000}s / 120s).")
+                onDismiss()
+                return
+            }
+
+            if (completedLevels < MIN_LEVELS_BETWEEN_INTERSTITIALS) {
+                Log.d(TAG, "showInterstitial suppressed: Insufficient completed levels ($completedLevels / $MIN_LEVELS_BETWEEN_INTERSTITIALS).")
+                onDismiss()
+                return
+            }
+
+            if (isBoardAnimating) {
+                Log.d(TAG, "showInterstitial suppressed: Board is actively animating.")
+                onDismiss()
+                return
+            }
+
+            if (now - lastButtonTapTime < 2_000L) {
+                Log.d(TAG, "showInterstitial suppressed: Too close to user button tap.")
+                onDismiss()
+                return
+            }
         }
 
         if (!isFullScreenAdShowing.compareAndSet(false, true)) {
             Log.d(TAG, "showInterstitial suppressed: Another fullscreen ad is already presenting.")
-            onDismiss()
-            return
-        }
-
-        val prefs = getPrefs(activity)
-        val now = System.currentTimeMillis()
-        val lastShowTime = prefs.getLong(KEY_LAST_INTERSTITIAL_TIME, 0L)
-        val completedLevels = prefs.getInt(KEY_COMPLETED_LEVELS_SINCE_AD, 0)
-
-        if (now - lastShowTime < INTERSTITIAL_MIN_INTERVAL_MS) {
-            Log.d(TAG, "showInterstitial suppressed: Cooldown active (${(now - lastShowTime) / 1000}s / 120s).")
-            isFullScreenAdShowing.set(false)
-            onDismiss()
-            return
-        }
-
-        if (completedLevels < MIN_LEVELS_BETWEEN_INTERSTITIALS) {
-            Log.d(TAG, "showInterstitial suppressed: Insufficient completed levels ($completedLevels / $MIN_LEVELS_BETWEEN_INTERSTITIALS).")
-            isFullScreenAdShowing.set(false)
-            onDismiss()
-            return
-        }
-
-        if (isBoardAnimating) {
-            Log.d(TAG, "showInterstitial suppressed: Board is actively animating.")
-            isFullScreenAdShowing.set(false)
-            onDismiss()
-            return
-        }
-
-        if (now - lastButtonTapTime < 2_000L) {
-            Log.d(TAG, "showInterstitial suppressed: Too close to user button tap.")
-            isFullScreenAdShowing.set(false)
             onDismiss()
             return
         }
@@ -228,6 +333,7 @@ object AdManager {
                 override fun onAdDismissedFullScreenContent() {
                     interstitialAd = null
                     isFullScreenAdShowing.set(false)
+                    val prefs = getPrefs(activity)
                     prefs.edit()
                         .putLong(KEY_LAST_INTERSTITIAL_TIME, System.currentTimeMillis())
                         .putInt(KEY_COMPLETED_LEVELS_SINCE_AD, 0)
@@ -249,41 +355,95 @@ object AdManager {
                 }
             }
             ad.show(activity)
-        } else if (UnityAdsManager.isInterstitialReady.value) {
-            Log.i(TAG, "AdMob interstitial not ready, displaying Unity Ads Interstitial fallback.")
-            UnityAdsManager.showInterstitial(activity, onDismiss = {
-                isFullScreenAdShowing.set(false)
-                prefs.edit()
-                    .putLong(KEY_LAST_INTERSTITIAL_TIME, System.currentTimeMillis())
-                    .putInt(KEY_COMPLETED_LEVELS_SINCE_AD, 0)
-                    .apply()
-                preloadInterstitial(activity)
-                onDismiss()
-            })
         } else {
-            isFullScreenAdShowing.set(false)
-            preloadInterstitial(activity)
-            UnityAdsManager.preloadAds()
-            onDismiss()
+            // Load on demand and present immediately
+            val unitId = currentInterstitialAdUnitId
+            Log.i(TAG, "Interstitial not in memory, requesting on demand for unit $unitId...")
+            _isAdLoading.value = true
+            InterstitialAd.load(
+                activity.applicationContext,
+                unitId,
+                AdRequest.Builder().build(),
+                object : InterstitialAdLoadCallback() {
+                    override fun onAdLoaded(loadedAd: InterstitialAd) {
+                        _isAdLoading.value = false
+                        loadedAd.fullScreenContentCallback = object : FullScreenContentCallback() {
+                            override fun onAdDismissedFullScreenContent() {
+                                isFullScreenAdShowing.set(false)
+                                val prefs = getPrefs(activity)
+                                prefs.edit()
+                                    .putLong(KEY_LAST_INTERSTITIAL_TIME, System.currentTimeMillis())
+                                    .putInt(KEY_COMPLETED_LEVELS_SINCE_AD, 0)
+                                    .apply()
+                                preloadInterstitial(activity)
+                                onDismiss()
+                            }
+
+                            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                                isFullScreenAdShowing.set(false)
+                                preloadInterstitial(activity)
+                                onDismiss()
+                            }
+                        }
+                        loadedAd.show(activity)
+                    }
+
+                    override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+                        _isAdLoading.value = false
+                        Log.w(TAG, "On-demand interstitial failed [$unitId - ${loadAdError.code}].")
+                        if (com.example.BuildConfig.DEBUG && unitId != TEST_INTERSTITIAL_AD_UNIT_ID) {
+                            InterstitialAd.load(
+                                activity.applicationContext,
+                                TEST_INTERSTITIAL_AD_UNIT_ID,
+                                AdRequest.Builder().build(),
+                                object : InterstitialAdLoadCallback() {
+                                    override fun onAdLoaded(testAd: InterstitialAd) {
+                                        testAd.fullScreenContentCallback = object : FullScreenContentCallback() {
+                                            override fun onAdDismissedFullScreenContent() {
+                                                isFullScreenAdShowing.set(false)
+                                                preloadInterstitial(activity)
+                                                onDismiss()
+                                            }
+
+                                            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                                                isFullScreenAdShowing.set(false)
+                                                onDismiss()
+                                            }
+                                        }
+                                        testAd.show(activity)
+                                    }
+
+                                    override fun onAdFailedToLoad(err: LoadAdError) {
+                                        isFullScreenAdShowing.set(false)
+                                        preloadInterstitial(activity)
+                                        onDismiss()
+                                    }
+                                }
+                            )
+                        } else {
+                            isFullScreenAdShowing.set(false)
+                            preloadInterstitial(activity)
+                            onDismiss()
+                        }
+                    }
+                }
+            )
         }
 
     }
 
     fun preloadRewarded(context: Context) {
-        if (!ConsentManager.canRequestAds) return
-        if (REWARDED_AD_UNIT_ID == REWARDED_INTERSTITIAL_AD_UNIT_ID) {
-            preloadRewardedInterstitial(context)
-            return
-        }
+        if (!canServeAds(context)) return
         if (rewardedAd != null || isRewardedLoading) return
         isRewardedLoading = true
 
+        val unitId = currentRewardedAdUnitId
         Handler(Looper.getMainLooper()).post {
             try {
                 val adRequest = AdRequest.Builder().build()
                 RewardedAd.load(
                     context.applicationContext,
-                    REWARDED_AD_UNIT_ID,
+                    unitId,
                     adRequest,
                     object : RewardedAdLoadCallback() {
                         override fun onAdLoaded(ad: RewardedAd) {
@@ -291,16 +451,21 @@ object AdManager {
                             isRewardedLoading = false
                             _isRewardedReady.value = true
                             ad.onPaidEventListener = OnPaidEventListener { adValue ->
-                                logAdImpressionRevenue(context, adValue, "rewarded", REWARDED_AD_UNIT_ID)
+                                logAdImpressionRevenue(context, adValue, "rewarded", unitId)
                             }
-                            Log.d(TAG, "AdMob Rewarded Ad loaded successfully")
+                            Log.d(TAG, "AdMob Rewarded Ad loaded successfully ($unitId)")
                         }
 
                         override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                             rewardedAd = null
                             isRewardedLoading = false
                             _isRewardedReady.value = false
-                            Log.w(TAG, "AdMob Rewarded Ad failed to load [${loadAdError.code}]: ${loadAdError.message}")
+                            Log.w(TAG, "AdMob Rewarded Ad failed to load [$unitId - ${loadAdError.code}]: ${loadAdError.message}")
+                            if (com.example.BuildConfig.DEBUG && unitId != TEST_REWARDED_AD_UNIT_ID) {
+                                Handler(Looper.getMainLooper()).post {
+                                    loadFallbackTestRewarded(context)
+                                }
+                            }
                         }
                     }
                 )
@@ -312,17 +477,38 @@ object AdManager {
         }
     }
 
+    private fun loadFallbackTestRewarded(context: Context) {
+        try {
+            RewardedAd.load(
+                context.applicationContext,
+                TEST_REWARDED_AD_UNIT_ID,
+                AdRequest.Builder().build(),
+                object : RewardedAdLoadCallback() {
+                    override fun onAdLoaded(ad: RewardedAd) {
+                        rewardedAd = ad
+                        _isRewardedReady.value = true
+                        Log.i(TAG, "Google Test Rewarded Ad cached as fallback successfully!")
+                    }
+                    override fun onAdFailedToLoad(err: LoadAdError) {
+                        Log.w(TAG, "Fallback test rewarded failed: ${err.message}")
+                    }
+                }
+            )
+        } catch (_: Throwable) {}
+    }
+
     fun preloadRewardedInterstitial(context: Context) {
-        if (!ConsentManager.canRequestAds) return
+        if (!canServeAds(context)) return
         if (rewardedInterstitialAd != null || isRewardedInterstitialLoading) return
         isRewardedInterstitialLoading = true
 
+        val unitId = currentRewardedInterstitialAdUnitId
         Handler(Looper.getMainLooper()).post {
             try {
                 val adRequest = AdRequest.Builder().build()
                 RewardedInterstitialAd.load(
                     context.applicationContext,
-                    REWARDED_INTERSTITIAL_AD_UNIT_ID,
+                    unitId,
                     adRequest,
                     object : RewardedInterstitialAdLoadCallback() {
                         override fun onAdLoaded(ad: RewardedInterstitialAd) {
@@ -331,16 +517,21 @@ object AdManager {
                             _isRewardedInterstitialReady.value = true
                             _isRewardedReady.value = true
                             ad.onPaidEventListener = OnPaidEventListener { adValue ->
-                                logAdImpressionRevenue(context, adValue, "rewarded_interstitial", REWARDED_INTERSTITIAL_AD_UNIT_ID)
+                                logAdImpressionRevenue(context, adValue, "rewarded_interstitial", unitId)
                             }
-                            Log.d(TAG, "AdMob Rewarded Interstitial loaded successfully")
+                            Log.d(TAG, "AdMob Rewarded Interstitial loaded successfully ($unitId)")
                         }
 
                         override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                             rewardedInterstitialAd = null
                             isRewardedInterstitialLoading = false
                             _isRewardedInterstitialReady.value = false
-                            Log.w(TAG, "AdMob Rewarded Interstitial failed to load [${loadAdError.code}]: ${loadAdError.message}")
+                            Log.w(TAG, "AdMob Rewarded Interstitial failed to load [$unitId - ${loadAdError.code}]: ${loadAdError.message}")
+                            if (com.example.BuildConfig.DEBUG && unitId != TEST_REWARDED_INTERSTITIAL_AD_UNIT_ID) {
+                                Handler(Looper.getMainLooper()).post {
+                                    loadFallbackTestRewardedInterstitial(context)
+                                }
+                            }
                         }
                     }
                 )
@@ -350,6 +541,27 @@ object AdManager {
                 Log.w(TAG, "Rewarded Interstitial loading exception: ${e.message}")
             }
         }
+    }
+
+    private fun loadFallbackTestRewardedInterstitial(context: Context) {
+        try {
+            RewardedInterstitialAd.load(
+                context.applicationContext,
+                TEST_REWARDED_INTERSTITIAL_AD_UNIT_ID,
+                AdRequest.Builder().build(),
+                object : RewardedInterstitialAdLoadCallback() {
+                    override fun onAdLoaded(ad: RewardedInterstitialAd) {
+                        rewardedInterstitialAd = ad
+                        _isRewardedInterstitialReady.value = true
+                        _isRewardedReady.value = true
+                        Log.i(TAG, "Google Test Rewarded Interstitial cached as fallback successfully!")
+                    }
+                    override fun onAdFailedToLoad(err: LoadAdError) {
+                        Log.w(TAG, "Fallback test rewarded interstitial failed: ${err.message}")
+                    }
+                }
+            )
+        } catch (_: Throwable) {}
     }
 
     private fun presentRewardedInterstitialAd(
@@ -490,10 +702,12 @@ object AdManager {
     fun showRewardedWithTransaction(
         activity: Activity,
         onRewardEarned: (rewardAmount: Int, transactionId: String) -> Unit,
-        onDismiss: () -> Unit = {}
+        onDismiss: () -> Unit = {},
+        onUnavailable: (() -> Unit)? = null
     ) {
-        if (!ConsentManager.canRequestAds) {
-            Log.w(TAG, "showRewarded suppressed: canRequestAds is false.")
+        if (!canServeAds(activity)) {
+            Log.w(TAG, "showRewarded suppressed: ads not permitted.")
+            onUnavailable?.invoke()
             onDismiss()
             return
         }
@@ -517,101 +731,103 @@ object AdManager {
             return
         }
 
-        // 2. Load on-demand with automatic format matching
-        android.widget.Toast.makeText(activity, "Loading reward ad from AdMob...", android.widget.Toast.LENGTH_SHORT).show()
-        Log.i(TAG, "Requesting on-demand ad. Primary unit: $REWARDED_INTERSTITIAL_AD_UNIT_ID")
+        // 2. Load on-demand: indicate loading to user
+        val primaryUnit = currentRewardedAdUnitId
+        Log.i(TAG, "Requesting on-demand Rewarded Ad. Primary unit: $primaryUnit (isTestAdsMode=${_isTestAdsMode.value})")
+        _isAdLoading.value = true
 
-        // First attempt: RewardedInterstitialAd (matching unit 7505860934)
-        val adRequest = AdRequest.Builder().build()
-        RewardedInterstitialAd.load(
+        val mainHandler = Handler(Looper.getMainLooper())
+        val timeoutRunnable = Runnable {
+            if (_isAdLoading.value) {
+                Log.w(TAG, "Ad request timed out after 15s.")
+                _isAdLoading.value = false
+                isFullScreenAdShowing.set(false)
+                onUnavailable?.invoke()
+                onDismiss()
+            }
+        }
+        mainHandler.postDelayed(timeoutRunnable, 15000L)
+
+        RewardedAd.load(
             activity.applicationContext,
-            REWARDED_INTERSTITIAL_AD_UNIT_ID,
-            adRequest,
-            object : RewardedInterstitialAdLoadCallback() {
-                override fun onAdLoaded(loadedAd: RewardedInterstitialAd) {
-                    Log.i(TAG, "Live AdMob Rewarded Interstitial loaded successfully.")
+            primaryUnit,
+            AdRequest.Builder().build(),
+            object : RewardedAdLoadCallback() {
+                override fun onAdLoaded(loadedAd: RewardedAd) {
+                    mainHandler.removeCallbacks(timeoutRunnable)
+                    _isAdLoading.value = false
+                    Log.i(TAG, "AdMob Rewarded Ad loaded successfully ($primaryUnit).")
                     loadedAd.onPaidEventListener = OnPaidEventListener { adValue ->
-                        logAdImpressionRevenue(activity, adValue, "rewarded_interstitial", REWARDED_INTERSTITIAL_AD_UNIT_ID)
+                        logAdImpressionRevenue(activity, adValue, "rewarded", primaryUnit)
                     }
-                    presentRewardedInterstitialAd(activity, loadedAd, onRewardEarned, onDismiss)
+                    presentRewardedAd(activity, loadedAd, onRewardEarned, onDismiss)
                 }
 
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {
-                    val isFormatMismatch = loadAdError.message.contains("match format", ignoreCase = true)
-                    Log.w(TAG, "RewardedInterstitial load returned [${loadAdError.code}]: ${loadAdError.message}. FormatMismatch=$isFormatMismatch")
-
-                    if (isFormatMismatch) {
-                        // Fallback attempt: Standard RewardedAd format
-                        Log.i(TAG, "Retrying with RewardedAd format on unit: $REWARDED_AD_UNIT_ID")
-                        RewardedAd.load(
-                            activity.applicationContext,
-                            REWARDED_AD_UNIT_ID,
-                            AdRequest.Builder().build(),
-                            object : RewardedAdLoadCallback() {
-                                override fun onAdLoaded(fallbackAd: RewardedAd) {
-                                    Log.i(TAG, "Live fallback RewardedAd loaded successfully.")
-                                    fallbackAd.onPaidEventListener = OnPaidEventListener { adValue ->
-                                        logAdImpressionRevenue(activity, adValue, "rewarded", REWARDED_AD_UNIT_ID)
-                                    }
-                                    presentRewardedAd(activity, fallbackAd, onRewardEarned, onDismiss)
-                                }
-
-                                override fun onAdFailedToLoad(fallbackError: LoadAdError) {
-                                    Log.w(TAG, "AdMob fallback failed [${fallbackError.code}]: ${fallbackError.message}. Initiating direct Unity Ads fallback.")
-                                    // Direct Unity Ads Fallback (Game ID 800427695, placement BP_Rewarded_Android)
-                                    UnityAdsManager.showRewarded(
-                                        activity = activity,
-                                        onRewardEarned = { amount ->
-                                            isFullScreenAdShowing.set(false)
-                                            onRewardEarned(amount, UUID.randomUUID().toString())
-                                        },
-                                        onDismiss = {
-                                            isFullScreenAdShowing.set(false)
-                                            onDismiss()
-                                        }
-                                    )
-                                }
-                            }
-                        )
-                    } else {
-                        Log.w(TAG, "AdMob load returned [${loadAdError.code}]: ${loadAdError.message}. Initiating direct Unity Ads fallback.")
-                        // Direct Unity Ads Fallback (Game ID 800427695, placement BP_Rewarded_Android)
-                        UnityAdsManager.showRewarded(
-                            activity = activity,
-                            onRewardEarned = { amount ->
-                                isFullScreenAdShowing.set(false)
-                                onRewardEarned(amount, UUID.randomUUID().toString())
-                            },
-                            onDismiss = {
-                                isFullScreenAdShowing.set(false)
-                                preloadRewardedInterstitial(activity)
-                                onDismiss()
-                            }
-                        )
-                    }
+                    Log.w(TAG, "RewardedAd load returned [${loadAdError.code}]: ${loadAdError.message}.")
+                    tryRewardedInterstitialFallback(activity, mainHandler, timeoutRunnable, onRewardEarned, onDismiss, onUnavailable)
                 }
             }
         )
     }
 
+    private fun tryRewardedInterstitialFallback(
+        activity: Activity,
+        mainHandler: Handler,
+        timeoutRunnable: Runnable,
+        onRewardEarned: (rewardAmount: Int, transactionId: String) -> Unit,
+        onDismiss: () -> Unit,
+        onUnavailable: (() -> Unit)? = null
+    ) {
+        val interUnit = currentRewardedInterstitialAdUnitId
+        RewardedInterstitialAd.load(
+            activity.applicationContext,
+            interUnit,
+            AdRequest.Builder().build(),
+            object : RewardedInterstitialAdLoadCallback() {
+                override fun onAdLoaded(interAd: RewardedInterstitialAd) {
+                    mainHandler.removeCallbacks(timeoutRunnable)
+                    _isAdLoading.value = false
+                    Log.i(TAG, "RewardedInterstitial fallback loaded ($interUnit).")
+                    presentRewardedInterstitialAd(activity, interAd, onRewardEarned, onDismiss)
+                }
+
+                override fun onAdFailedToLoad(err: LoadAdError) {
+                    mainHandler.removeCallbacks(timeoutRunnable)
+                    _isAdLoading.value = false
+                    isFullScreenAdShowing.set(false)
+                    Log.w(TAG, "All rewarded ad formats failed [${err.code}]: ${err.message}. No free reward granted.")
+                    onUnavailable?.invoke()
+                    onDismiss()
+                }
+            }
+        )
+    }
 
     /**
-     * Standard overload for callers handling rewardAmount and optional onDismiss.
+     * Standard overload for callers handling rewardAmount, optional onDismiss, and optional onUnavailable.
      */
     fun showRewarded(
         activity: Activity,
         onRewardEarned: (rewardAmount: Int) -> Unit,
-        onDismiss: () -> Unit = {}
+        onDismiss: () -> Unit = {},
+        onUnavailable: (() -> Unit)? = null
     ) {
-        showRewardedWithTransaction(activity, { amount, _ -> onRewardEarned(amount) }, onDismiss)
+        showRewardedWithTransaction(
+            activity = activity,
+            onRewardEarned = { amount, _ -> onRewardEarned(amount) },
+            onDismiss = onDismiss,
+            onUnavailable = onUnavailable
+        )
     }
 
     fun showRewardedInterstitial(
         activity: Activity,
         onRewardEarned: (rewardAmount: Int) -> Unit,
-        onDismiss: () -> Unit = {}
+        onDismiss: () -> Unit = {},
+        onUnavailable: (() -> Unit)? = null
     ) {
-        showRewarded(activity, onRewardEarned, onDismiss)
+        showRewarded(activity, onRewardEarned, onDismiss, onUnavailable)
     }
 
     /**

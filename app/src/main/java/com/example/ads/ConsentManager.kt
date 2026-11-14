@@ -9,6 +9,7 @@ import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * ConsentManager coordinates Google User Messaging Platform (UMP) SDK for EEA, UK,
@@ -27,17 +28,20 @@ object ConsentManager {
     private val isMobileAdsInitialized = AtomicBoolean(false)
     private val isConsentGatheringInProgress = AtomicBoolean(false)
 
+    private val _canRequestAdsState = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val canRequestAdsState: kotlinx.coroutines.flow.StateFlow<Boolean> = _canRequestAdsState.asStateFlow()
+
     /**
      * Indicates whether ads can be requested based on UMP consent evaluation.
      * Guaranteed to permit ads globally unless explicitly revoked or blocked in EEA.
      */
     val canRequestAds: Boolean
         get() {
-            val info = consentInformation ?: return true
+            val info = consentInformation ?: return false
             if (info.privacyOptionsRequirementStatus == ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED) {
                 return info.canRequestAds()
             }
-            return true
+            return info.canRequestAds()
         }
 
     /**
@@ -75,6 +79,7 @@ object ConsentManager {
                         }
 
                         val canRequest = canRequestAds
+                        _canRequestAdsState.value = canRequest
                         Log.i(TAG, "UMP consent evaluation complete. canRequestAds=$canRequest")
                         if (canRequest) {
                             initializeMobileAds(activity)
@@ -86,6 +91,7 @@ object ConsentManager {
                     isConsentGatheringInProgress.set(false)
                     Log.w(TAG, "Consent update failed [${requestConsentError.errorCode}]: ${requestConsentError.message}")
                     val canRequest = canRequestAds
+                    _canRequestAdsState.value = canRequest
                     if (canRequest) {
                         initializeMobileAds(activity)
                     }
@@ -93,7 +99,9 @@ object ConsentManager {
                 }
             )
         } else {
-            onConsentCompleted(canRequestAds)
+            val canRequest = canRequestAds
+            _canRequestAdsState.value = canRequest
+            onConsentCompleted(canRequest)
         }
     }
 

@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -9,6 +10,7 @@ import com.example.GameApplication
 import com.example.data.UserProfile
 import com.example.data.UserRepository
 import com.example.game.BoosterType
+import com.example.payment.PlayBillingManager
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -21,6 +23,8 @@ class HomeViewModel(private val repository: UserRepository) : ViewModel() {
     )
 
     val allLevelProgress = repository.allLevelProgress
+    val billingState = PlayBillingManager.billingState
+    val productOffers = PlayBillingManager.productOffers
 
     fun toggleSound() {
         viewModelScope.launch {
@@ -134,6 +138,19 @@ class HomeViewModel(private val repository: UserRepository) : ViewModel() {
         skipLevelWithDiamonds(levelId)
     }
 
+    // --- Play Billing Actions ---
+    fun launchBillingPurchase(activity: Activity, productId: String, isSubscription: Boolean) {
+        PlayBillingManager.launchPurchaseFlow(activity, productId, isSubscription)
+    }
+
+    fun retryBillingConnection() {
+        PlayBillingManager.reconnectAndPreload()
+    }
+
+    fun dismissBillingState() {
+        PlayBillingManager.dismissBillingState()
+    }
+
     // --- Piggy Bank & Lucky Wheel Actions ---
     fun smashPiggyBank(onSuccess: (Int) -> Unit = {}) {
         viewModelScope.launch {
@@ -155,16 +172,10 @@ class HomeViewModel(private val repository: UserRepository) : ViewModel() {
         }
     }
 
-    // --- Authentication Actions ---
-    fun loginWithGoogle(email: String, displayName: String, photoUrl: String? = null) {
+    // --- Authentication Actions (Google Sign-In exclusively for cloud profiles) ---
+    fun loginWithGoogle(email: String, displayName: String, photoUrl: String? = null, authUid: String? = null) {
         viewModelScope.launch {
-            repository.loginWithGoogle(email, displayName, photoUrl)
-        }
-    }
-
-    fun loginWithEmail(email: String, displayName: String? = null) {
-        viewModelScope.launch {
-            repository.loginWithEmail(email, displayName)
+            repository.loginWithGoogle(email, displayName, photoUrl, authUid)
         }
     }
 
@@ -173,8 +184,6 @@ class HomeViewModel(private val repository: UserRepository) : ViewModel() {
             repository.loginAsAdmin()
         }
     }
-
-
 
     fun logout() {
         viewModelScope.launch {
@@ -194,7 +203,7 @@ class HomeViewModel(private val repository: UserRepository) : ViewModel() {
         }
     }
 
-    // --- Payment & Alternative Checkout ---
+    // --- Payment Audit ---
     fun recordPurchase(method: String, paypalEmail: String? = null) {
         viewModelScope.launch {
             repository.recordPurchase(method, paypalEmail)
@@ -208,7 +217,7 @@ class HomeViewModel(private val repository: UserRepository) : ViewModel() {
         }
     }
 
-    // --- Developer & QA Sandbox Controls ---
+    // --- Developer & QA Sandbox Controls (Invoked only when BuildConfig.DEBUG) ---
     fun unlockLevels(upToLevel: Int) {
         viewModelScope.launch {
             repository.unlockLevels(upToLevel)

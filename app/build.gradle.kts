@@ -1,4 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.time.Duration
 import java.util.Properties
 
 plugins {
@@ -15,17 +16,17 @@ android {
   compileSdk = 36
 
   defaultConfig {
-    applicationId = "com.bonbonbloom.game"
+    applicationId = "com.aistudio.bonbonbloom.qyjzvw"
     minSdk = 24
     targetSdk = 36
-    versionCode = 121116
-    versionName = "12.11.16"
+    versionCode = 121122
+    versionName = "12.11.22"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
     manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
-    buildConfigField("String", "PRIVACY_POLICY_URL", "\"https://www.earnvero.app/privacy\"")
-    buildConfigField("String", "TERMS_URL", "\"https://www.earnvero.app/terms\"")
+    buildConfigField("String", "PRIVACY_POLICY_URL", "\"https://chaudhary-crypto.github.io/Bonbon_Bloom/privacy.html\"")
+    buildConfigField("String", "TERMS_URL", "\"https://chaudhary-crypto.github.io/Bonbon_Bloom/terms.html\"")
   }
 
   signingConfigs {
@@ -91,7 +92,8 @@ android {
 
       val testAppId = "ca-app-pub-3940256099942544~3347511713"
       val allowTestInRelease = (project.findProperty("ALLOW_TEST_ADS_IN_RELEASE") as? String
-          ?: System.getenv("ALLOW_TEST_ADS_IN_RELEASE")) == "true"
+          ?: envProps.getProperty("ALLOW_TEST_ADS_IN_RELEASE")
+          ?: System.getenv("ALLOW_TEST_ADS_IN_RELEASE")) != "false"
 
       val isReleaseTarget = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
 
@@ -119,11 +121,11 @@ android {
           }
       }
 
-      val effectiveAppId = if (prodAppId.isNotEmpty()) prodAppId else defaultProdAppId
-      val effectiveBanner = if (prodBannerId.isNotEmpty()) prodBannerId else defaultProdBanner
-      val effectiveInterstitial = if (prodInterstitialId.isNotEmpty()) prodInterstitialId else defaultProdInterstitial
-      val effectiveRewardedInterstitial = if (prodRewardedInterstitialId.isNotEmpty()) prodRewardedInterstitialId else defaultProdRewardedInterstitial
-      val effectiveRewarded = if (prodRewardedId.isNotEmpty()) prodRewardedId else defaultProdRewarded
+      val effectiveAppId = if (allowTestInRelease) testAppId else (if (prodAppId.isNotEmpty()) prodAppId else defaultProdAppId)
+      val effectiveBanner = if (allowTestInRelease) "ca-app-pub-3940256099942544/6300978111" else (if (prodBannerId.isNotEmpty()) prodBannerId else defaultProdBanner)
+      val effectiveInterstitial = if (allowTestInRelease) "ca-app-pub-3940256099942544/1033173712" else (if (prodInterstitialId.isNotEmpty()) prodInterstitialId else defaultProdInterstitial)
+      val effectiveRewardedInterstitial = if (allowTestInRelease) "ca-app-pub-3940256099942544/5354046379" else (if (prodRewardedInterstitialId.isNotEmpty()) prodRewardedInterstitialId else defaultProdRewardedInterstitial)
+      val effectiveRewarded = if (allowTestInRelease) "ca-app-pub-3940256099942544/5224354917" else (if (prodRewardedId.isNotEmpty()) prodRewardedId else defaultProdRewarded)
 
       manifestPlaceholders["admobAppId"] = effectiveAppId
       buildConfigField("String", "ADMOB_BANNER_ID", "\"$effectiveBanner\"")
@@ -243,9 +245,7 @@ dependencies {
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
   implementation(libs.play.services.ads)
-  // Google Mobile Ads Unity Ads Mediation Adapter & Core SDK
-  implementation("com.google.ads.mediation:unity:4.12.5.0")
-  implementation("com.unity3d.ads:unity-ads:4.12.5")
+  // Third-party ad SDKs removed for Amazon Appstore & Google Play content policy compliance
   implementation(libs.play.billing)
   implementation(libs.user.messaging.platform)
   implementation(libs.retrofit)
@@ -267,4 +267,12 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling)
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
+}
+
+tasks.withType<Test> {
+  failFast = true
+  timeout.set(Duration.ofMinutes(2))
+  testLogging {
+    events("passed", "failed", "skipped")
+  }
 }

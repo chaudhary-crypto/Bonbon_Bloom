@@ -298,17 +298,23 @@ fun SettingsDialog(
                 }
 
                 Text(
-                    text = "Bonbon Bloom v${com.example.BuildConfig.VERSION_NAME} • Offline-First Match-3 Engine",
+                    text = "Bonbon Bloom v${com.example.BuildConfig.VERSION_NAME} • Encrypted Sync & Fair Play",
                     fontSize = 10.sp,
                     color = Color.White.copy(alpha = 0.5f),
                     modifier = Modifier
                         .padding(top = 14.dp)
-                        .clickable {
-                            devTapCount++
-                            if (devTapCount >= 7) {
-                                devTapCount = 0
-                                HapticManager.performHapticFeedback(context, com.example.audio.HapticType.Heavy)
-                                showSecretAdminAuthDialog = true
+                        .let { mod ->
+                            if (com.example.BuildConfig.DEBUG) {
+                                mod.clickable {
+                                    devTapCount++
+                                    if (devTapCount >= 7) {
+                                        devTapCount = 0
+                                        HapticManager.performHapticFeedback(context, com.example.audio.HapticType.Heavy)
+                                        showSecretAdminAuthDialog = true
+                                    }
+                                }
+                            } else {
+                                mod
                             }
                         }
                 )
@@ -363,8 +369,8 @@ fun SettingsDialog(
         )
     }
 
-    // QA & Developer Sandbox Dialog
-    if (showDevSandbox) {
+    // QA & Developer Sandbox Dialog (Strictly Debug builds only)
+    if (com.example.BuildConfig.DEBUG && showDevSandbox) {
         DeveloperSandboxDialog(
             activity = activity,
             onDismiss = { showDevSandbox = false },
@@ -379,11 +385,8 @@ fun SettingsDialog(
         )
     }
 
-    if (showSecretAdminAuthDialog) {
-        var adminUserInput by remember { mutableStateOf("") }
-        var adminPassInput by remember { mutableStateOf("") }
+    if (com.example.BuildConfig.DEBUG && showSecretAdminAuthDialog) {
         var authError by remember { mutableStateOf<String?>(null) }
-        var passVisible by remember { mutableStateOf(false) }
 
         Dialog(onDismissRequest = { showSecretAdminAuthDialog = false }) {
             Card(
@@ -395,78 +398,38 @@ fun SettingsDialog(
                     modifier = Modifier.padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("👑 Master Verification", fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color(0xFFFFD54F))
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = adminUserInput,
-                        onValueChange = {
-                            adminUserInput = it
-                            authError = null
-                        },
-                        label = { Text("Username", color = Color(0xFFCE93D8)) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFFFD54F),
-                            unfocusedBorderColor = Color(0xFF7C4DFF),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = adminPassInput,
-                        onValueChange = {
-                            adminPassInput = it
-                            authError = null
-                        },
-                        label = { Text("Password", color = Color(0xFFCE93D8)) },
-                        singleLine = true,
-                        visualTransformation = if (passVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        trailingIcon = {
-                            Text(
-                                text = if (passVisible) "👁️" else "🔒",
-                                modifier = Modifier.clickable { passVisible = !passVisible }
-                            )
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFFFFD54F),
-                            unfocusedBorderColor = Color(0xFF7C4DFF),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        ),
-                        modifier = Modifier.fillMaxWidth()
+                    Text("👑 Owner Debug Verification", fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color(0xFFFFD54F))
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Sign in with the verified owner Google account (${com.example.auth.AdminAuthManager.OWNER_EMAIL}) to unlock debug QA tools.",
+                        fontSize = 12.sp,
+                        color = Color(0xFFCE93D8),
+                        textAlign = TextAlign.Center
                     )
 
                     authError?.let { err ->
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(err, color = Color(0xFFFF5252), fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(err, color = Color(0xFFFF5252), fontSize = 12.sp, textAlign = TextAlign.Center)
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Button(
                         onClick = {
-                            val isValid = com.example.auth.AdminAuthManager.verifyCredentials(adminUserInput, adminPassInput)
-                            if (isValid) {
+                            if (com.example.auth.AdminAuthManager.isVerifiedFirebaseOwnerSession()) {
                                 SoundManager.playLevelWin()
                                 onSecretAdminUnlocked?.invoke()
                                 showSecretAdminAuthDialog = false
                                 onDismiss()
                             } else {
-                                authError = "Access denied: Invalid credentials"
+                                authError = "Access denied: Please sign in via Google as the verified owner first."
                             }
                         },
-                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
                     ) {
-                        Text("Verify & Grant Master Access", fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Verify Owner Session", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
@@ -512,27 +475,25 @@ fun InAppPolicyReaderDialog(
                         .verticalScroll(rememberScrollState())
                 ) {
                     Text(
-                        text = "Bonbon Bloom is built with player privacy at its core. Gameplay progress and game records are stored locally on your device.\n\n" +
+                        text = "Bonbon Bloom is built by Novaro Technologies with player privacy and data security at its core.\n\n" +
                                 "1. ADVERTISING & GOOGLE ADMOB\n" +
-                                "• We partner with Google AdMob to display banner, interstitial, and rewarded ads.\n" +
-                                "• Google AdMob may process your device's Android Advertising ID (AD_ID), general IP location, and performance metrics to deliver ads, prevent fraudulent activity, and enforce frequency limits.\n" +
+                                "• We partner with Google AdMob to display banner, interstitial, and optional rewarded ads.\n" +
+                                "• Google AdMob may process your device's Android Advertising ID (AD_ID), general IP location, and performance metrics to deliver ads and prevent fraud.\n" +
                                 "• Learn how Google uses information from apps: https://policies.google.com/technologies/partner-sites\n\n" +
-                                "2. USER CONSENT & PRIVACY CONTROLS\n" +
-                                "• Users in the European Economic Area (EEA) and the UK are presented with the Google Certified User Messaging Platform (UMP) consent dialog.\n" +
-                                "• You can review, modify, or revoke your ad consent at any time directly in this app via Settings > 'Privacy Options (Ad Consent)'.\n" +
-                                "• You can reset or delete your Advertising ID anytime via your device Settings > Google > Ads.\n\n" +
-                                "3. AD PLACEMENT & ACCIDENTAL CLICK PREVENTION\n" +
-                                "• Banner ads are placed in dedicated containers clearly separated from the game board.\n" +
-                                "• Interstitial ads never interrupt active moves, board animations, or level launches.\n" +
-                                "• Rewarded video ads are strictly optional, player-initiated, and clearly labeled with the exact reward earned.\n\n" +
-                                "4. CHILDREN'S PRIVACY (COPPA)\n" +
-                                "Bonbon Bloom is intended for a general audience (13+). We do not knowingly collect personal information from children under 13.\n\n" +
-                                "5. LOCAL DATA & PURCHASES\n" +
-                                "• All progress, high scores, coins, gems, and booster inventories are kept locally on your device.\n" +
-                                "• In-app purchases are securely processed through Google Play Billing.\n" +
-                                "• You can delete all local data anytime via Settings > 'Delete My Data'.\n\n" +
-                                "6. SUPPORT & CONTACT\n" +
-                                "For assistance, privacy questions, or data deletion inquiries, contact our support team at: support@earnvero.app",
+                                "2. USER CONSENT & PRIVACY CONTROLS (EEA / UK / GDPR)\n" +
+                                "• Players in the EEA/UK are presented with Google's Certified User Messaging Platform (UMP) consent dialog.\n" +
+                                "• Review, modify, or revoke ad consent anytime in Settings > 'Privacy Options (Ad Consent)'.\n\n" +
+                                "3. GOOGLE SIGN-IN, CLOUD SYNC & APP CHECK\n" +
+                                "• Playing as Guest stores progress locally on your device in an encrypted-signed Room database.\n" +
+                                "• Signing in with Google syncs your profile, level progress, and verified purchase ledger via encrypted Firebase Firestore and Firebase App Check.\n\n" +
+                                "4. GOOGLE PLAY BILLING & VERIFICATION\n" +
+                                "• All real-money purchases and VIP subscriptions are processed exclusively by Google Play Billing and verified server-side via Google Play Developer API.\n" +
+                                "• We never collect or store your payment card or bank credentials.\n\n" +
+                                "5. CHILDREN'S PRIVACY (COPPA)\n" +
+                                "Bonbon Bloom is intended for general audiences (13+). We do not knowingly collect personal information from children under 13.\n\n" +
+                                "6. ACCOUNT & DATA DELETION\n" +
+                                "• Delete all local and cloud account data anytime via Settings > 'Delete My Data' or at https://chaudhary-crypto.github.io/Bonbon_Bloom/delete-account.html.\n" +
+                                "• Contact privacy & support: support@earnvero.app",
                         fontSize = 12.sp,
                         color = Color(0xFFE0E0E0),
                         lineHeight = 18.sp
@@ -548,7 +509,7 @@ fun InAppPolicyReaderDialog(
                     OutlinedButton(
                         onClick = {
                             try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.earnvero.app/privacy"))
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://chaudhary-crypto.github.io/Bonbon_Bloom/privacy.html"))
                                 context.startActivity(intent)
                             } catch (_: Throwable) {}
                         },
@@ -615,15 +576,15 @@ fun InAppTermsReaderDialog(
                                 "1. ACCEPTANCE\n" +
                                 "By installing or playing Bonbon Bloom, you agree to these Terms and our Privacy Policy.\n\n" +
                                 "2. VIRTUAL ITEMS & CURRENCY\n" +
-                                "Coins, gems, lives, and boosters are virtual game items with no real-world cash value. They cannot be refunded or exchanged for real currency except where required by law.\n\n" +
-                                "3. SUBSCRIPTIONS (VIP GOLD PASS)\n" +
-                                "VIP Gold Pass is an auto-renewing subscription managed through Google Play. Payment will be charged to your Google Play account upon confirmation. Cancel anytime via Google Play Store > Subscriptions at least 24 hours prior to renewal.\n\n" +
-                                "4. FAIR PLAY & INTEGRITY\n" +
-                                "Players may not modify, reverse engineer, or use unauthorized tools to tamper with saved progress or game balances. Tampered saves are subject to balance reset.\n\n" +
-                                "5. NO WARRANTIES\n" +
-                                "The game is provided 'as is' for your personal entertainment.\n\n" +
+                                "Coins, gems, lives, and boosters are virtual digital items with no real-world monetary value. They cannot be transferred or exchanged for real cash.\n\n" +
+                                "3. GOOGLE PLAY PURCHASES, TAXES & REFUNDS\n" +
+                                "All purchases and VIP subscriptions are billed solely by Google Play. Applicable regional taxes/GST are included or calculated by Google Play at checkout. Refunds are governed by Google Play's Refund Policy and mandatory statutory consumer protection laws.\n\n" +
+                                "4. AUTO-RENEWING SUBSCRIPTIONS (VIP GOLD PASS)\n" +
+                                "Weekly and Monthly VIP Gold Passes renew automatically at the price displayed on Google Play unless cancelled at least 24 hours before the end of the current period in Google Play Store > Payments & subscriptions > Subscriptions.\n\n" +
+                                "5. FAIR PLAY & ANTI-CHEAT\n" +
+                                "Players may not tamper with saves, forge purchase receipts, or reverse-engineer game clients. Verified violations forfeit illegally obtained items and suspend cloud sync.\n\n" +
                                 "6. CONTACT & SUPPORT\n" +
-                                "Questions regarding these terms? Contact: support@earnvero.app",
+                                "Support, refund inquiries, and legal notices: support@earnvero.app",
                         fontSize = 12.sp,
                         color = Color(0xFFE0E0E0),
                         lineHeight = 18.sp
@@ -639,7 +600,7 @@ fun InAppTermsReaderDialog(
                     OutlinedButton(
                         onClick = {
                             try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.earnvero.app/terms"))
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://chaudhary-crypto.github.io/Bonbon_Bloom/terms.html"))
                                 context.startActivity(intent)
                             } catch (_: Throwable) {}
                         },
@@ -677,6 +638,7 @@ fun DeveloperSandboxDialog(
     onRemoveAds: () -> Unit,
     onGrantVip: () -> Unit
 ) {
+    val context = LocalContext.current
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(22.dp),
@@ -824,22 +786,79 @@ fun DeveloperSandboxDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // AdMob Ads Testing
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // AdMob Ads Controls & Mode Switcher
+                val isTestAdsActive by com.example.ads.AdManager.isTestAdsMode.collectAsState()
+                SettingsSectionHeader("ADMIN AD CONTROLS")
+                
+                // Status card explaining AdMob approval status and test ads
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isTestAdsActive) Color(0xFF3E2723) else Color(0xFF1B5E20)
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (isTestAdsActive) "🟡 TEST ADS ACTIVE" else "🟢 PRODUCTION ADS ACTIVE",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (isTestAdsActive) Color(0xFFFFD54F) else Color(0xFFB9F6CA)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (isTestAdsActive)
+                                "Account Approval Pending: Google test ads serve on all banners & rewarded videos so you can test smoothly. Your production IDs (pub-9950623744691218) are preserved."
+                            else
+                                "Serving live production ads from your AdMob account (pub-9950623744691218).",
+                            fontSize = 10.sp,
+                            color = Color.White.copy(alpha = 0.9f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Toggle Button for Admin
+                Button(
+                    onClick = {
+                        val currentContext = activity ?: context
+                        com.example.ads.AdManager.toggleTestAdsMode(currentContext)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(36.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isTestAdsActive) Color(0xFFFFA000) else Color(0xFF43A047)
+                    )
+                ) {
+                    Text(
+                        text = if (isTestAdsActive) "Switch to Live Ads (AdMob pub-9950623744691218)" else "Switch to Test Ads (Safe Testing)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
                 if (activity != null) {
-                    SettingsSectionHeader("ADMOB AD SIMULATION")
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedButton(
                             onClick = {
-                                com.example.ads.AdManager.showInterstitial(activity, currentLevelId = 11)
+                                com.example.ads.AdManager.showInterstitial(activity, currentLevelId = 11, forceShow = true)
                             },
                             modifier = Modifier.weight(1f).height(38.dp),
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF80D8FF))
                         ) {
-                            Text("🎬 Interstitial", fontSize = 11.sp)
+                            Text("🎬 Test Interstitial", fontSize = 11.sp)
                         }
 
                         OutlinedButton(
@@ -855,7 +874,7 @@ fun DeveloperSandboxDialog(
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFB9F6CA))
                         ) {
-                            Text("📺 Rewarded", fontSize = 11.sp)
+                            Text("📺 Test Rewarded (+150 🪙)", fontSize = 10.sp)
                         }
                     }
                 }

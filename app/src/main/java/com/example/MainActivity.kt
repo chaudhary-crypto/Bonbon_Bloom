@@ -6,7 +6,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -25,8 +28,13 @@ import com.example.ui.screens.HomeViewModel
 import com.example.ui.screens.WorldMapScreen
 import com.example.ui.theme.BonbonBloomTheme
 import com.example.ads.ConsentManager
+import com.example.ads.AdManager
 
 class MainActivity : ComponentActivity() {
+
+    companion object {
+        var currentActivity: ComponentActivity? = null
+    }
 
     val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -38,15 +46,22 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        currentActivity = this
 
         // STEP 1: Configure Firebase App Check with launch intent before any UI or Firebase operations
         com.example.auth.configureAppCheck(this, intent)
 
         enableEdgeToEdge()
 
-        // Google UMP Consent flow for GDPR/EEA before loading ads
-        ConsentManager.requestConsent(this) {
-            // Ads consent resolved
+        // Google Mobile Ads & UMP Consent flow: gather EEA/UK/state consent before initializing/loading ads in release builds
+        if (BuildConfig.DEBUG) {
+            ConsentManager.initializeMobileAds(this)
+            AdManager.preloadAds(this)
+        }
+        ConsentManager.requestConsent(this) { canRequest ->
+            if (canRequest || BuildConfig.DEBUG) {
+                AdManager.preloadAds(this)
+            }
         }
 
         // Pre-Android 13 scheduling (Android 13+ deferred until level 1 complete)
@@ -87,6 +102,7 @@ class MainActivity : ComponentActivity() {
         try {
             SoundManager.setAppInForeground(true)
             SoundManager.resume()
+            com.example.payment.PlayBillingManager.queryAndRestorePurchases()
         } catch (_: Throwable) {}
     }
 
@@ -119,8 +135,10 @@ class MainActivity : ComponentActivity() {
 fun BonbonBloomApp() {
     val navController = rememberNavController()
     val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory)
+    val isAdLoading by com.example.ads.AdManager.isAdLoading.collectAsState()
 
-    NavHost(navController = navController, startDestination = "home") {
+    androidx.compose.foundation.layout.Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+        NavHost(navController = navController, startDestination = "home") {
         composable("home") {
             HomeScreen(
                 viewModel = homeViewModel,
@@ -160,4 +178,9 @@ fun BonbonBloomApp() {
             )
         }
     }
+
+    if (isAdLoading) {
+        com.example.ui.components.AdLoadingOverlay()
+    }
+}
 }

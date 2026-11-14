@@ -36,17 +36,27 @@ import com.google.android.gms.ads.LoadAdError
 @Composable
 fun BannerAdView(
     modifier: Modifier = Modifier,
-    adUnitId: String = AdManager.BANNER_AD_UNIT_ID
+    adUnitId: String? = null
 ) {
     val context = LocalContext.current
     val isInEditMode = LocalInspectionMode.current
     val hasRemovedAds by PlayBillingManager.hasRemovedAds.collectAsState()
+    val isTestAdsMode by AdManager.isTestAdsMode.collectAsState()
+    val canRequestAds by ConsentManager.canRequestAdsState.collectAsState()
 
-    // If player purchased Remove Ads or UMP consent forbids ads, do not display or load banners
-    if (hasRemovedAds || !ConsentManager.canRequestAds) {
+    // If player purchased Remove Ads, do not display or load banners
+    if (hasRemovedAds) {
         Box(modifier = Modifier.size(0.dp))
         return
     }
+
+    // In production mode, require UMP consent. In test ads mode, allow test ads directly!
+    if (!isTestAdsMode && !canRequestAds) {
+        Box(modifier = Modifier.size(0.dp))
+        return
+    }
+
+    val effectiveAdUnit = adUnitId ?: AdManager.currentBannerAdUnitId
 
     var isAdLoaded by remember { mutableStateOf(false) }
     var adLoadFailed by remember { mutableStateOf(false) }
@@ -85,41 +95,49 @@ fun BannerAdView(
     ) {
         AndroidView(
             factory = { ctx ->
-                try {
-                    val view = AdView(ctx)
-                    adViewRef = view
-                    view.setAdSize(AdSize.BANNER)
-                    view.adUnitId = adUnitId
-                    view.setOnPaidEventListener { adValue ->
-                        AdManager.logAdImpressionRevenue(ctx, adValue, "banner", adUnitId)
-                    }
-                    view.adListener = object : AdListener() {
-                        override fun onAdLoaded() {
-                            isAdLoaded = true
-                            adLoadFailed = false
-                        }
+                val container = android.widget.FrameLayout(ctx)
+                fun loadAdIntoContainer(unitId: String) {
+                    try {
+                        container.removeAllViews()
+                        val adView = AdView(ctx).apply {
+                            setAdSize(AdSize.BANNER)
+                            this.adUnitId = unitId
+                            setOnPaidEventListener { adValue ->
+                                AdManager.logAdImpressionRevenue(ctx, adValue, "banner", unitId)
+                            }
+                            adListener = object : AdListener() {
+                                override fun onAdLoaded() {
+                                    isAdLoaded = true
+                                    adLoadFailed = false
+                                    Log.d("BannerAdView", "Banner ad loaded successfully ($unitId)")
+                                }
 
-                        override fun onAdFailedToLoad(error: LoadAdError) {
-                            Log.w("BannerAdView", "Banner ad failed to load [${error.code}]: ${error.message}")
-                            isAdLoaded = false
-                            adLoadFailed = true
-                            view.postDelayed({
-                                try {
-                                    if (!isAdLoaded && ConsentManager.canRequestAds && !PlayBillingManager.hasRemovedAds.value) {
-                                        view.loadAd(AdRequest.Builder().build())
+                                override fun onAdFailedToLoad(error: LoadAdError) {
+                                    Log.w("BannerAdView", "Banner ad failed [$unitId - ${error.code}]: ${error.message}")
+                                    if (unitId != AdManager.TEST_BANNER_AD_UNIT_ID) {
+                                        Log.i("BannerAdView", "Switching to Google Test Banner...")
+                                        container.post {
+                                            loadAdIntoContainer(AdManager.TEST_BANNER_AD_UNIT_ID)
+                                        }
+                                    } else {
+                                        isAdLoaded = false
+                                        adLoadFailed = true
                                     }
-                                } catch (_: Throwable) {}
-                            }, 15000L)
+                                }
+                            }
                         }
+                        container.addView(adView)
+                        adView.loadAd(AdRequest.Builder().build())
+                    } catch (e: Throwable) {
+                        Log.w("BannerAdView", "Error loading banner: ${e.message}")
+                        adLoadFailed = true
                     }
-                    view.loadAd(AdRequest.Builder().build())
-                    view
-                } catch (e: Throwable) {
-                    Log.w("BannerAdView", "AdView creation skipped safely: ${e.message}")
-                    adLoadFailed = true
-                    android.view.View(ctx)
                 }
+
+                loadAdIntoContainer(effectiveAdUnit)
+                container
             },
+            update = { /* dynamic updates handled via mode state */ },
             modifier = Modifier.fillMaxWidth()
         )
 
